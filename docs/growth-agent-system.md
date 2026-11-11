@@ -303,16 +303,28 @@ The rule for the week: start small, keep a human on every gate, and expand only 
 | **1** | Write `/context` files: ICP, offer brief, approved proof points, answer bank and tone guide. Buy 2 sending domains, set SPF/DKIM/DMARC and **start warmup today**. Create GHL pipeline stages, custom fields and the booking calendar. | Book a test call yourself. | Context files approved by the owner, and warmup is running. |
 | **2** | Lead Researcher: run 50 raw rows by hand (paste into Claude with the prompt). | Spot-check every row: are the facts real, the URLs working and the fit correct? | 45 or more usable leads; fix the prompt for anything wrong. |
 | **3** | Outreach Writer: generate sequences for 20 leads. Social: generate the month-1 plan and week-1 posts. | The owner edits and records what changed and why; update the prompt. | 15 of 20 sequences need light edits only. Week-1 posts are scheduled. |
-| **4** | Connect the Make/n8n scenarios for Agents 1 and 2 to GHL. **Send the first 20–30 emails** from an already-warmed inbox (or the owner's existing inbox at low volume) while the new domains warm. | Confirm that sends, stops-on-reply and the unsubscribe all work. | First batch sent, zero errors. |
+| **4** | Connect the Make/n8n scenarios for Agents 1 and 2 to GHL. **Send the first 20 cold emails** (5 per inbox, fit-score-5 leads only), following the ramp schedule below. | Confirm that sends, stops-on-reply and the unsubscribe all work. | First batch sent, zero errors. |
 | **5** | Appointment Setter in **draft-only mode**: runs on every reply, a human sends. Feed it 20 sample replies (write some tricky ones). | Compare its classifications with yours. | At least 95% agreement on samples; every needs_human case is caught. |
 | **6** | Review all metrics (section 6). Fix the weakest step only. | Re-run 10 leads and 10 replies through the updated prompts. | One documented improvement. |
 | **7** | Expand: 50 leads a day, auto-sequence on, and the Setter still approved by a human. Write the week-2 plan. | Daily 15-minute approval routine is in place. | The system runs a full day with only the approval gates needing the owner. |
 
-**Warmup (runs in parallel from Day 1)**
-- Weeks 1–2: from each new inbox, send 5–10 real emails a day to people you know (team, friends, existing contacts). Ask them to reply, and to mark it "not spam" and star it if it lands in spam. Add 2–3 a day.
-- Add TrulyInbox's free plan to one inbox for automatic warmup traffic.
-- Weeks 3–4: start cold at 10–15 a day per inbox. Keep warmup running. Increase only while bounces stay under 2% and replies keep landing in the inbox.
-- Before scaling, test placement by sending to your own Gmail and Outlook addresses.
+**Warmup: ramp as you go (cold email starts in week 1 at very low volume)**
+
+Per inbox, per day (4 inboxes = 2 domains × 2 inboxes):
+
+| When | Cold emails | Warmup emails (manual + TrulyInbox) | Total cold/day across 4 inboxes |
+|---|---|---|---|
+| Days 1–3 | 0 (set up DNS, let the domains age) | 5–10 | 0 |
+| Days 4–7 | 5 | 10 | 20 |
+| Week 2 | 10 | 10 | 40 |
+| Week 3 | 15–20 | 10 | 60–80 |
+| Week 4+ | 25–30 | 10 (keep running) | 100–120 |
+
+Rules while ramping:
+- Send the early cold emails only to your best-fit leads (fit score 5). Replies build reputation faster than anything else.
+- Plain text, no links and no images in email 1, and only verified addresses.
+- Move up a level only if, over the last 3 days, bounces stayed under 2%, there were no spam complaints, and a test email to your own Gmail and Outlook landed in the inbox.
+- If any check fails, drop back one level for 3 days. Never skip levels to catch up.
 
 **Week 2 onward:** raise volume gradually (to about 30–50 emails per inbox per day once warmup is done). Let the Setter auto-send "interested" replies only after 50 or more correct decisions in a row.
 
