@@ -278,7 +278,8 @@ GHL is the single source of truth. Each agent reads a pipeline stage and writes 
 | Layer | Tool | Notes |
 |---|---|---|
 | CRM, pipeline, memory | **GoHighLevel** | Contacts, custom fields for sequences, tags (`DND`, `ICP-tier`), pipeline stages and conversation history. This is where all context lives. |
-| Sending | GHL email + 2–3 secondary sending domains | Never send cold email from the main `bookclarity` domain. Use lookalike domains with SPF, DKIM and DMARC set and warmed up. |
+| Sending | 2–3 secondary domains, 1–2 Google Workspace or Microsoft 365 inboxes each, connected to GHL (or to a cold-email tool) | Never send cold email from the main `bookclarity` domain. Use lookalike domains with SPF, DKIM and DMARC set and warmed up. Don't send cold email through GHL's built-in LC Email: it is shared sending infrastructure, its warmup only caps daily volume, and outside warmup tools mostly can't connect to it. Check HighLevel's sending policy on cold lists. Replies still land in GHL conversations. |
+| Warmup | Free: manual warmup + TrulyInbox free plan (1 inbox). Paid: a cold-email tool with warmup included (e.g. Instantly) | Allow 2–3 weeks before real cold volume. See the warmup notes under section 5. |
 | Booking | GHL Calendar | One "Books Health Check, 15 min" calendar with buffers and reminders. |
 | Lead data | Apollo / Sales Navigator / Google Maps exports + verifier | Pick one source to start. |
 | Agents | Claude API (Opus, Sonnet and Haiku) called from GHL webhooks via Make, n8n or Zapier | One scenario per agent. Store prompts in this repo so they are versioned. |
@@ -306,6 +307,12 @@ The rule for the week: start small, keep a human on every gate, and expand only 
 | **5** | Appointment Setter in **draft-only mode**: runs on every reply, a human sends. Feed it 20 sample replies (write some tricky ones). | Compare its classifications with yours. | At least 95% agreement on samples; every needs_human case is caught. |
 | **6** | Review all metrics (section 6). Fix the weakest step only. | Re-run 10 leads and 10 replies through the updated prompts. | One documented improvement. |
 | **7** | Expand: 50 leads a day, auto-sequence on, and the Setter still approved by a human. Write the week-2 plan. | Daily 15-minute approval routine is in place. | The system runs a full day with only the approval gates needing the owner. |
+
+**Warmup (runs in parallel from Day 1)**
+- Weeks 1–2: from each new inbox, send 5–10 real emails a day to people you know (team, friends, existing contacts). Ask them to reply, and to mark it "not spam" and star it if it lands in spam. Add 2–3 a day.
+- Add TrulyInbox's free plan to one inbox for automatic warmup traffic.
+- Weeks 3–4: start cold at 10–15 a day per inbox. Keep warmup running. Increase only while bounces stay under 2% and replies keep landing in the inbox.
+- Before scaling, test placement by sending to your own Gmail and Outlook addresses.
 
 **Week 2 onward:** raise volume gradually (to about 30–50 emails per inbox per day once warmup is done). Let the Setter auto-send "interested" replies only after 50 or more correct decisions in a row.
 
