@@ -1,6 +1,6 @@
 # Book Clarity Client Portal: Design
 
-Status: draft for approval · 2026-11-19
+Status: approved by owner · 2026-11-19
 
 ## 1. Intent
 
@@ -167,7 +167,7 @@ ACE-prepaid clients are excluded from every client reminder.
 | Client type | Window | When it's earned |
 |---|---|---|
 | Direct | First **12 paid** monthly invoices | Each month, when that payment clears |
-| ACE, months 1–6 | 6 months | **All at once**, on the client's onboarding date, once the batch payment has cleared. If the batch isn't paid yet, it shows as *pending* until it clears. Base = 6 × the package's monthly price (see open question Q1) |
+| ACE, months 1–6 | 6 months | **All at once**, on the client's onboarding date, once the batch payment has cleared. If the batch isn't paid yet, it shows as *pending* until it clears. Base = 6 × the package's monthly list price (Q1) |
 | ACE, months 7–12 (if the client continues) | Next **6 paid** monthly invoices | Each month, when that payment clears |
 
 **Other rules**
@@ -292,6 +292,8 @@ These were settled as builder/design calls (marked so the owner can check them):
 - **D5: Executive role (my call).** The commission engine supports any number of executives. A login role that shows only one executive's own statements is **not built in phase 1**, since only Owners earn commission today. The data model allows adding it later.
 - **D6: ACE client continuing but no payment method yet (my call).** New status **"Continuing: awaiting payment method"**. The client, not ACE, gets payment-setup reminders starting 14 days before the ACE period ends. No charge is attempted without a saved method. If nothing is saved by the end date, Owners get an alert and decide.
 
-## 19. Open questions for the owner
+## 19. Owner answers (2026-11-19)
 
-_(Answers pending; see the conversation.)_
+- **Q1: ACE months 1–6 commission base.** Calculated from the **regular package list price** (6 × monthly list price), not from the per-slot price ACE paid. A Custom ACE slot uses its Custom price, and a Custom client who continues keeps that price from month 7.
+- **Q2: GHL build.** **The portal builder builds the GHL side:** workflows, pipeline, custom fields and tags. The builder also drafts all email and SMS wording, which Book Clarity approves before go-live. Workflows are triggered by tag and custom-field changes so they work on any GHL plan; an inbound webhook trigger can be used if the plan allows it.
+- **Q3: 100%-off months.** A $0 invoice does **not** count toward a commission window. The window extends so the executive still gets 12 (Direct) or 6 (ACE months 7–12) *paid* months.
