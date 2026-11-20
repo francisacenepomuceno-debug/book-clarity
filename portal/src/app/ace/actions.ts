@@ -5,7 +5,7 @@ import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/auth/permissions";
 import { savePackage } from "@/packages/packages";
-import { createBatch, recordBatchPayment, setAceCustomer } from "@/ace/batches";
+import { createBatch, issueBatchInvoice, recordBatchPayment, setAceCustomer } from "@/ace/batches";
 import { assignSlot } from "@/ace/slots";
 import { markContinuing, markEnded } from "@/ace/continuation";
 
@@ -77,6 +77,7 @@ export async function assignSlotAction(_: AceFormResult, f: FormData): Promise<A
     clientId,
     startOn: str(f.get("startOn")),
     customMonthlyCents: custom ? cents(custom) : undefined,
+    confirmSubscribed: f.get("confirmSubscribed") === "on",
   });
   if (!r.ok) {
     if (newName) await db.client.deleteMany({ where: { id: clientId, aceSlotId: null } });
@@ -99,5 +100,13 @@ export async function endAction(_: AceFormResult, f: FormData): Promise<AceFormR
   const r = await markEnded(str(f.get("clientId")));
   if (!r.ok) return { error: r.error };
   revalidatePath("/ace");
+  return { ok: true };
+}
+
+export async function resendInvoiceAction(_: AceFormResult, f: FormData): Promise<AceFormResult> {
+  const batchId = str(f.get("batchId"));
+  const r = await issueBatchInvoice(batchId);
+  if (!r.ok) return { error: r.error };
+  revalidatePath(`/ace/${batchId}`);
   return { ok: true };
 }

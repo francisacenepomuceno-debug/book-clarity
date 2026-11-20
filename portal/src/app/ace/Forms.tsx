@@ -7,6 +7,7 @@ import {
   createBatchAction,
   endAction,
   recordPaymentAction,
+  resendInvoiceAction,
   savePackageAction,
   setAceCustomerAction,
   type AceFormResult,
@@ -140,6 +141,7 @@ export function AssignSlotForm(p: { batchId: string; packages: (Pkg & { open: nu
           </select>
         </label>
         <label>Onboarding (start) date<input name="startOn" type="date" defaultValue={p.today} required /></label>
+        <label className="check"><input type="checkbox" name="confirmSubscribed" /> Client is on autopay and this is a past assignment</label>
         {isCustom && <label>Custom monthly price ($)<input name="customMonthly" type="number" min="0.01" step="0.01" required /></label>}
         <button disabled={pending}>Assign to slot</button>
       </div>
@@ -163,5 +165,16 @@ export function ContinuationButtons({ clientId }: { clientId: string }) {
       {(c.error || e.error) && <span className="form-error">{c.error || e.error}</span>}
       {e.ok && <span className="form-ok">Will end when the prepaid period ends.</span>}
     </div>
+  );
+}
+
+export function ResendInvoiceForm({ batchId }: { batchId: string }) {
+  const [s, action, pending] = useActionState<AceFormResult, FormData>(resendInvoiceAction, {});
+  return (
+    <form action={action} className="inline-form">
+      <input type="hidden" name="batchId" value={batchId} />
+      <button disabled={pending}>Send invoice again</button>
+      <Msg s={s} ok="ACE's invoice was sent." />
+    </form>
   );
 }

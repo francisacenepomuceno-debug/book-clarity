@@ -7,7 +7,7 @@ import { formatUsd } from "@/lib/money";
 import { fmtDate, todayInTz } from "@/lib/format";
 import { STATUS_LABEL } from "@/domain/clientStatus";
 import { PortalHeader } from "@/app/PortalHeader";
-import { AssignSlotForm, RecordPaymentForm } from "../Forms";
+import { AssignSlotForm, RecordPaymentForm, ResendInvoiceForm } from "../Forms";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +36,17 @@ export default async function BatchPage({ params }: { params: Promise<{ batchId:
           {formatUsd(batch.totalCents)} ·{" "}
           {batch.paidAt
             ? `Paid ${fmtDate(batch.paidAt)} (${batch.paidVia === "STRIPE" ? "through Stripe" : batch.paymentMethod}${batch.paymentReference ? `, ${batch.paymentReference}` : ""})`
-            : batch.stripeInvoiceId ? "Invoice sent to ACE, not paid yet" : "Not paid yet"}
+            : batch.invoiceSentAt ? `Invoice sent to ACE ${fmtDate(batch.invoiceSentAt)}, not paid yet` : batch.stripeInvoiceId ? "Invoice not fully sent" : "Not paid yet"}
           {batch.note && ` · ${batch.note}`}
         </p>
 
+        {!batch.paidAt && !batch.invoiceSentAt && batch.stripeInvoiceId && (
+          <section className="panel pad">
+            <h3>ACE's invoice wasn't fully sent</h3>
+            <p className="muted">Stripe had a problem while sending it. Try again; nothing is duplicated.</p>
+            <ResendInvoiceForm batchId={batchId} />
+          </section>
+        )}
         {!batch.paidAt && (
           <section className="panel pad">
             <h3>Record payment received</h3>

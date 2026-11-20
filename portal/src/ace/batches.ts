@@ -90,46 +90,80 @@ export async function createBatch(i: {
   });
 
   if (customer) {
-    try {
-      const stripe = getStripe();
+    const issued = await issue(batch.id);
+    if (!issued.ok) return issued;
+  }
+  await writeAudit({ actorId: actor.id, action: "ace_batch_created", entity: "AceBatch", entityId: batch.id, after: { lines: i.lines, totalCents: batch.totalCents, alreadyPaid: !!i.alreadyPaid } });
+  return { ok: true, batchId: batch.id };
+}
+
+/**
+ * Creates, finalizes and sends ACE's Stripe invoice for a batch. Safe to repeat: the invoice id is saved as soon
+ * as it exists and every Stripe write uses a fixed idempotency key, so a retry finishes a half-done invoice.
+ */
+async function issue(batchId: string): Promise<ActionResult> {
+  const batch = await db.aceBatch.findUniqueOrThrow({ where: { id: batchId } });
+  if (batch.paidAt) return { ok: false, error: "This batch is already paid." };
+  const customer = await aceCustomerId();
+  if (!customer) return { ok: false, error: "Set ACE's Stripe customer in Settings first." };
+  const lines = await db.aceBatchLine.findMany({ where: { batchId }, orderBy: { id: "asc" } });
+  const name = new Map((await db.package.findMany()).map((p) => [p.id, p.name]));
+  const stripe = getStripe();
+  try {
+    let invoiceId = batch.stripeInvoiceId;
+    if (!invoiceId) {
       const inv = await stripe.invoices.create(
         {
           customer,
           collection_method: "send_invoice",
           days_until_due: 14,
           auto_advance: false,
-          metadata: { kind: "ACE_BATCH", batchId: batch.id },
+          metadata: { kind: "ACE_BATCH", batchId },
           payment_settings: {
             payment_method_types: ["us_bank_account", "customer_balance"],
             payment_method_options: { customer_balance: { funding_type: "bank_transfer", bank_transfer: { type: "us_bank_transfer" } } },
           },
         },
-        { idempotencyKey: `bc-ace-batch-${batch.id}` },
+        { idempotencyKey: `bc-ace-batch-${batchId}` },
       );
-      const name = new Map(packages.map((p) => [p.id, p.name]));
-      for (const [n, l] of i.lines.entries()) {
+      invoiceId = inv.id!;
+      await db.aceBatch.update({ where: { id: batchId }, data: { stripeInvoiceId: invoiceId } });
+    }
+    const live = await stripe.invoices.retrieve(invoiceId);
+    if (live.status === "draft") {
+      for (const [n, l] of lines.entries()) {
         await stripe.invoiceItems.create(
           {
             customer,
-            invoice: inv.id!,
+            invoice: invoiceId,
             amount: l.quantity * l.unitPriceCents,
             currency: "usd",
             description: `${l.quantity} × ${name.get(l.packageId)} — 6 months + onboarding (ACE)`,
-            metadata: { kind: "ACE_BATCH", batchId: batch.id },
+            metadata: { kind: "ACE_BATCH", batchId },
           },
-          { idempotencyKey: `bc-ace-batch-${batch.id}-line-${n}` },
+          { idempotencyKey: `bc-ace-batch-${batchId}-line-${n}` },
         );
       }
-      await stripe.invoices.finalizeInvoice(inv.id!);
-      await stripe.invoices.sendInvoice(inv.id!);
-      await db.aceBatch.update({ where: { id: batch.id }, data: { stripeInvoiceId: inv.id! } });
-    } catch (e) {
-      console.error(`[ace] batch ${batch.id}: Stripe invoice failed:`, (e as Error).message);
-      return { ok: false, error: "The batch was saved but Stripe couldn't create ACE's invoice. Check the Stripe key, then record payment by hand or contact support." };
+      await stripe.invoices.finalizeInvoice(invoiceId);
     }
+    if (!batch.invoiceSentAt) {
+      await stripe.invoices.sendInvoice(invoiceId);
+      await db.aceBatch.update({ where: { id: batchId }, data: { invoiceSentAt: new Date() } });
+    }
+    return { ok: true };
+  } catch (e) {
+    console.error(`[ace] batch ${batchId}: Stripe invoice failed:`, (e as Error).message);
+    return { ok: false, error: "The batch was saved, but sending ACE's invoice failed. Open the batch and use \"Send invoice again\"." };
   }
-  await writeAudit({ actorId: actor.id, action: "ace_batch_created", entity: "AceBatch", entityId: batch.id, after: { lines: i.lines, totalCents: batch.totalCents, alreadyPaid: !!i.alreadyPaid } });
-  return { ok: true, batchId: batch.id };
+}
+
+/** Retry for a batch whose invoice wasn't fully created or sent. */
+export async function issueBatchInvoice(batchId: string): Promise<ActionResult> {
+  const actor = await aceManager();
+  if (!actor) return FORBIDDEN;
+  const r = await issue(batchId);
+  if (r.ok) await writeAudit({ actorId: actor.id, action: "ace_batch_invoice_sent", entity: "AceBatch", entityId: batchId });
+  return r;
 }
 
 /** "Record payment received": a check, wire or other payment made outside Stripe. */
@@ -157,7 +191,8 @@ export async function recordBatchPayment(batchId: string, i: { paidOn: string; m
 /** Webhook: ACE paid the batch invoice through Stripe. */
 export async function onBatchInvoicePaid(inv: Stripe.Invoice): Promise<void> {
   const batchId = inv.metadata?.batchId;
-  if (!batchId) return;
+  // Paid out of band = "Record payment received" in the portal, which records the details itself.
+  if (!batchId || (inv as unknown as { paid_out_of_band?: boolean }).paid_out_of_band) return;
   const paidAt = inv.status_transitions?.paid_at ? new Date(inv.status_transitions.paid_at * 1000) : new Date();
   const method = await getPaidMethod(inv).catch(() => null);
   const updated = await db.aceBatch.updateMany({
@@ -180,6 +215,7 @@ export type BatchSummary = {
   paymentMethod: string | null;
   paymentReference: string | null;
   stripeInvoiceId: string | null;
+  invoiceSentAt: Date | null;
   packages: { packageId: string; name: string; quantity: number; unitPriceCents: number; used: number; open: number }[];
 };
 

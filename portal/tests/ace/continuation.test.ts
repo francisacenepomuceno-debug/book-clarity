@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type Stripe from "stripe";
 import { db } from "@/lib/db";
-import { dueForContinuation, markContinuing, markEnded, onSetupCompleted } from "@/ace/continuation";
+import { dueForContinuation, markContinuing, markEnded, onSetupCompleted, startSetupFromToken } from "@/ace/continuation";
 import { refreshClientStatus } from "@/stripe/clientStatusSync";
 import { resetDb } from "../helpers/db";
 
@@ -62,7 +62,9 @@ describe("markContinuing", () => {
   it("creates the client's Stripe customer and a setup link", async () => {
     const id = await aceClient("Soon Co", 20);
     const r = await markContinuing(id, "https://portal.test");
-    expect(r).toEqual({ ok: true, setupUrl: "https://checkout.stripe.test/cs_1" });
+    expect(r).toEqual({ ok: true, setupUrl: expect.stringMatching(/^https:\/\/portal\.test\/continue\//) });
+    const token = (r as { setupUrl: string }).setupUrl.split("/continue/")[1];
+    expect(await startSetupFromToken(token, "https://portal.test")).toEqual({ url: "https://checkout.stripe.test/cs_1" });
     expect((s().checkout.sessions.create.mock.calls[0] as unknown[])[0]).toMatchObject({
       mode: "setup",
       customer: "cus_new",

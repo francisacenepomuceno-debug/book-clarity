@@ -21,6 +21,8 @@ export async function assignSlot(i: {
   clientId: string;
   startOn: string;
   customMonthlyCents?: number;
+  /** Required to put a client who is already on Stripe autopay into a slot (e.g. a historical assignment). */
+  confirmSubscribed?: boolean;
 }): Promise<ActionResult<{ slotId: string }>> {
   let actor;
   try {
@@ -44,6 +46,13 @@ export async function assignSlot(i: {
     if (!client) return { ok: false as const, error: "Client not found." };
     if (client.aceSlotId || (await tx.aceSlot.findUnique({ where: { clientId: i.clientId } }))) {
       return { ok: false as const, error: "This client already has an ACE slot." };
+    }
+    if (client.stripeSubscriptionId && until > new Date() && !i.confirmSubscribed) {
+      return {
+        ok: false as const,
+        error:
+          "This client is on autopay, so Stripe would keep charging them during the prepaid months. Pause or cancel their subscription in Stripe first, or tick the confirmation box if this is a past (historical) assignment.",
+      };
     }
     const open = await tx.$queryRaw<{ id: string }[]>`
       SELECT id FROM "AceSlot"
@@ -81,12 +90,21 @@ export async function postAceCommission(slotId: string): Promise<number> {
   const pkg = await db.package.findUniqueOrThrow({ where: { id: slot.packageId } });
   const base = aceLumpBase({ monthlyListCents: slot.customMonthlyCents ?? pkg.monthlyPriceCents });
   if (base <= 0) return 0;
-  const split = splitAt(await db.commissionShare.findMany({ where: { clientId: slot.clientId } }), slot.startDate);
+  const shares = await db.commissionShare.findMany({ where: { clientId: slot.clientId } });
+  // Owners are usually set after the start date (new ACE clients, historical slots): if no version covers the
+  // start date, use the earliest one.
+  let split = splitAt(shares, slot.startDate);
+  if (split.length === 0 && shares.length > 0) {
+    split = splitAt(shares, new Date(Math.min(...shares.map((s) => s.effectiveFrom.getTime()))));
+  }
   if (split.length === 0) return 0;
 
   const occurredAt = batch.paidAt > slot.startDate ? batch.paidAt : slot.startDate;
   const eventMonth = monthOf(occurredAt, tz());
   return db.$transaction(async (tx) => {
+    // One lump per slot: once it has posted, later split changes never add to it.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${aceSlotInvoiceKey(slot.id)}))`;
+    if (await tx.commissionEntry.count({ where: { invoiceId: aceSlotInvoiceKey(slot.id), kind: "ACE_PREPAID" } })) return 0;
     let created = 0;
     for (const s of [...split].sort((a, b) => a.executiveId.localeCompare(b.executiveId))) {
       await lockExecutive(tx, s.executiveId);

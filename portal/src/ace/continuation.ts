@@ -1,4 +1,5 @@
 import type Stripe from "stripe";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/db";
 import { getStripe } from "@/stripe/client";
 import { ForbiddenError, requirePermission } from "@/auth/permissions";
@@ -32,7 +33,23 @@ export async function dueForContinuation(now: Date = new Date()) {
   return rows.map((c) => ({ clientId: c.id, name: c.name, prepaidUntil: c.acePrepaidUntil!, decision: c.continuationDecision }));
 }
 
-/** The client wants to continue: record it and create a Stripe setup link for them to save a card or bank account. */
+const sign = (clientId: string) =>
+  createHmac("sha256", process.env.AUTH_SECRET ?? "").update(`ace-continue:${clientId}`).digest("base64url");
+
+/** Long-lived link for the client: the portal opens a fresh Stripe setup page each time (Stripe's expire in 24h). */
+export function continuationToken(clientId: string): string {
+  return `${clientId}.${sign(clientId)}`;
+}
+
+function clientIdFromToken(token: string): string | null {
+  const [clientId, mac] = token.split(".");
+  if (!clientId || !mac) return null;
+  const expected = Buffer.from(sign(clientId));
+  const got = Buffer.from(mac);
+  return expected.length === got.length && timingSafeEqual(expected, got) ? clientId : null;
+}
+
+/** The client wants to continue: record it and return the link to send them for setting up autopay. */
 export async function markContinuing(clientId: string, baseUrl: string): Promise<ActionResult<{ setupUrl: string }>> {
   const actor = await aceManager();
   if (!actor) return FORBIDDEN;
@@ -43,29 +60,38 @@ export async function markContinuing(clientId: string, baseUrl: string): Promise
   if (!pkg) return { ok: false, error: "This client has no package." };
   if (!pkg.isCustom && !pkg.stripePriceId) return { ok: false, error: "Link this package to a Stripe price in Settings → Packages." };
 
-  const stripe = getStripe();
-  let customerId = client.stripeCustomerId;
-  if (!customerId) {
-    const cus = await stripe.customers.create(
+  if (!client.stripeCustomerId) {
+    const cus = await getStripe().customers.create(
       { name: client.name, email: client.email ?? undefined, metadata: { clientId } },
       { idempotencyKey: `bc-ace-cus-${clientId}` },
     );
-    customerId = cus.id;
-    await db.client.update({ where: { id: clientId }, data: { stripeCustomerId: customerId } });
+    await db.client.update({ where: { id: clientId }, data: { stripeCustomerId: cus.id } });
   }
-  const session = await stripe.checkout.sessions.create({
+  await db.client.update({ where: { id: clientId }, data: { continuationDecision: "CONTINUING" } });
+  await refreshClientStatus(clientId);
+  await writeAudit({ actorId: actor.id, action: "ace_continuing", entity: "Client", entityId: clientId });
+  return { ok: true, setupUrl: `${baseUrl}/continue/${continuationToken(clientId)}` };
+}
+
+/** Public: the client opened their link. Returns a fresh Stripe setup page, or why the link no longer works. */
+export async function startSetupFromToken(token: string, baseUrl: string): Promise<{ url: string } | { error: string }> {
+  const clientId = clientIdFromToken(token);
+  if (!clientId) return { error: "This link isn't valid. Please use the link Book Clarity sent you." };
+  const client = await db.client.findUnique({ where: { id: clientId } });
+  if (!client || client.continuationDecision !== "CONTINUING" || client.endedAt || client.stripeSubscriptionId || !client.stripeCustomerId) {
+    return { error: "This link is no longer active. If you'd like to continue with Book Clarity, please contact us." };
+  }
+  const session = await getStripe().checkout.sessions.create({
     mode: "setup",
-    customer: customerId,
+    customer: client.stripeCustomerId,
     currency: "usd",
     allowed_payment_method_types: ["card", "us_bank_account"],
     metadata: { kind: "ACE_CONTINUATION", clientId },
     success_url: `${baseUrl}/setup-complete`,
     cancel_url: `${baseUrl}/setup-complete?cancelled=1`,
   });
-  await db.client.update({ where: { id: clientId }, data: { continuationDecision: "CONTINUING" } });
-  await refreshClientStatus(clientId);
-  await writeAudit({ actorId: actor.id, action: "ace_continuing", entity: "Client", entityId: clientId, after: { sessionId: session.id } });
-  return { ok: true, setupUrl: session.url! };
+  await db.client.update({ where: { id: clientId }, data: { aceSetupSessionId: session.id } });
+  return { url: session.url! };
 }
 
 /** The client won't continue: service ends when the prepaid period ends (staff decision, never automatic). */
@@ -78,6 +104,10 @@ export async function markEnded(clientId: string): Promise<ActionResult> {
   const now = new Date();
   const endedAt = client.acePrepaidUntil && client.acePrepaidUntil > now ? client.acePrepaidUntil : now;
   await db.client.update({ where: { id: clientId }, data: { continuationDecision: "ENDING", endedAt } });
+  if (client.aceSetupSessionId) {
+    // Close any setup page the client still has open so it can't start autopay.
+    await getStripe().checkout.sessions.expire(client.aceSetupSessionId).catch(() => undefined);
+  }
   await refreshClientStatus(clientId);
   await writeAudit({ actorId: actor.id, action: "ace_ending", entity: "Client", entityId: clientId, after: { endedAt } });
   return { ok: true };
@@ -92,6 +122,8 @@ export async function onSetupCompleted(session: Stripe.Checkout.Session, stripe:
   if (!clientId) return;
   const client = await db.client.findUnique({ where: { id: clientId } });
   if (!client || client.stripeSubscriptionId || !client.acePrepaidUntil || !client.packageId) return;
+  // Only when an Owner said the client is continuing and hasn't since marked them as not continuing.
+  if (client.continuationDecision !== "CONTINUING" || client.endedAt) return;
   const customer = typeof session.customer === "string" ? session.customer : session.customer?.id;
   if (!customer) return;
 
@@ -121,7 +153,8 @@ export async function onSetupCompleted(session: Stripe.Checkout.Session, stripe:
       customer,
       items: [{ price }],
       default_payment_method: pm,
-      trial_end: Math.floor(client.acePrepaidUntil.getTime() / 1000) + 1,
+      // First charge the day after the prepaid period; if that has already passed, billing starts now.
+      ...(client.acePrepaidUntil > new Date() ? { trial_end: Math.floor(client.acePrepaidUntil.getTime() / 1000) + 1 } : {}),
       metadata: { kind: "ACE_CONTINUATION", clientId },
     },
     { idempotencyKey: `bc-ace-sub-${clientId}` },

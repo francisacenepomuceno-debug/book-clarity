@@ -1,6 +1,7 @@
 import type { Role } from "@prisma/client";
 import { db } from "@/lib/db";
 import { can } from "@/auth/permissions";
+import { refreshClientStatus } from "@/stripe/clientStatusSync";
 import type { LiveClientRow } from "@/stripe/mapSubscription";
 import type { ClientStatus } from "@/domain/clientStatus";
 
@@ -71,10 +72,17 @@ export async function syncClientsFromSnapshot(rows: LiveClientRow[]): Promise<vo
 export async function withClientTypes(rows: LiveClientRow[]): Promise<LiveClientRow[]> {
   const aces = await db.client.findMany({
     where: { type: "ACE", stripeSubscriptionId: { in: rows.map((r) => r.subscriptionId) } },
-    select: { stripeSubscriptionId: true },
+    select: { stripeSubscriptionId: true, acePrepaidUntil: true },
   });
-  const ace = new Set(aces.map((a) => a.stripeSubscriptionId));
-  return rows.map((r) => ({ ...r, clientType: ace.has(r.subscriptionId) ? "ACE" : "DIRECT" }));
+  const ace = new Map(aces.map((a) => [a.stripeSubscriptionId, a]));
+  const now = new Date();
+  return rows.map((r) => {
+    const a = ace.get(r.subscriptionId);
+    if (!a) return { ...r, clientType: "DIRECT" as const };
+    // A continued ACE client is still prepaid until the period ends, whatever Stripe shows meanwhile.
+    const prepaid = a.acePrepaidUntil !== null && a.acePrepaidUntil > now;
+    return { ...r, clientType: "ACE" as const, ...(prepaid ? { status: "PREPAID_ACE" as const, pastDueSince: null, amountDueCents: 0 } : {}) };
+  });
 }
 
 /**
@@ -82,6 +90,9 @@ export async function withClientTypes(rows: LiveClientRow[]): Promise<LiveClient
  * Their row id is the portal client id, which the client page also accepts.
  */
 export async function aceDashboardRows(): Promise<LiveClientRow[]> {
+  // Statuses change with the calendar (prepaid period ending), so bring them up to date before showing them.
+  const pending = await db.client.findMany({ where: { type: "ACE", stripeSubscriptionId: null, status: { not: "ENDED" } }, select: { id: true } });
+  for (const c of pending) await refreshClientStatus(c.id);
   const clients = await db.client.findMany({
     where: { type: "ACE", stripeSubscriptionId: null, status: { not: "ENDED" } },
     orderBy: { name: "asc" },

@@ -20,6 +20,7 @@ function fakeStripe() {
       finalizeInvoice: vi.fn(async () => ({ id: "in_ace" })),
       sendInvoice: vi.fn(async () => ({ id: "in_ace" })),
       pay: vi.fn(async () => ({ id: "in_ace", status: "paid" })),
+      retrieve: vi.fn(async () => ({ id: "in_ace", status: "draft" })),
     },
     invoiceItems: { create: vi.fn(async () => ({ id: "ii" })) },
     invoicePayments: { list: vi.fn(async () => ({ data: [{ payment: { payment_intent: { latest_charge: { id: "ch", payment_method_details: { type: "us_bank_account" } } } } }] })) },
