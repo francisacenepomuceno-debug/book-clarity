@@ -309,3 +309,9 @@ These were settled as builder/design calls (marked so the owner can check them):
   - ACE clients are notified **60 days** before the prepaid period ends, then at 30 and 14 days, and can answer Yes or No themselves.
   - A client's "No" is recorded but ends nothing. Owners try to win the client back, and the client can still say Yes up to the last prepaid day.
   - Service ends only when an Owner confirms it.
+- **Contracts (2026-11-20):** the four package contracts were provided as PDFs and converted to templates in `portal/contracts/`. Only the blanks are filled in, plus these approved wording changes:
+  - monthly billing starts 14 days after the onboarding fee, then on that date each month (not the 1st);
+  - the onboarding fee is charged at signup and the first month 14 days later;
+  - Auto-Pay mentions ACH (no fee).
+- **Countersigning:** Jose countersigns each contract in the portal. The client isn't held up while it waits.
+- **Auto-suspend:** clients are suspended automatically when unpaid for N days (default 30, a setting). There are no late fees for now. Paying resumes the client automatically.
