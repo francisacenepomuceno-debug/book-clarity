@@ -4,7 +4,8 @@ import { listPackages } from "@/packages/packages";
 import { STEP_LABEL } from "@/domain/onboarding";
 import { fmtDate } from "@/lib/format";
 import { PortalHeader } from "@/app/PortalHeader";
-import { NewClientForm } from "./Forms";
+import { NewClientForm, WaiveFeeButton } from "./Forms";
+import { formatUsd } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 const STUCK_MS = 3 * 86400_000;
@@ -14,7 +15,7 @@ function Table({ rows, showStep, now, owner }: { rows: OnboardingRow[]; showStep
   return (
     <table>
       <thead>
-        <tr><th>Client</th><th>Type</th><th>Package</th>{showStep && <th>Current step</th>}<th>Started</th><th>Call booked</th><th>Contract</th><th>Link</th></tr>
+        <tr><th>Client</th><th>Type</th><th>Package</th>{showStep && <th>Current step</th>}<th>Started</th><th>Call booked</th><th>Contract</th>{owner && <th>Onboarding fee</th>}<th>Link</th></tr>
       </thead>
       <tbody>
         {rows.map((r) => (
@@ -33,6 +34,12 @@ function Table({ rows, showStep, now, owner }: { rows: OnboardingRow[]; showStep
             <td>
               {!r.signedAt ? "Not signed" : r.countersignedAt ? "Fully signed" : owner ? <a href={`/contracts/${r.onboardingId}`}>Awaiting countersign</a> : "Awaiting countersign"}
             </td>
+            {owner && (
+              <td>
+                {r.feeCents === 0 ? "Waived" : r.feeCents != null ? formatUsd(r.feeCents) : "—"}{" "}
+                {r.feeWaivable && <WaiveFeeButton onboardingId={r.onboardingId} />}
+              </td>
+            )}
             <td><input readOnly value={r.link} style={{ width: 140 }} /></td>
           </tr>
         ))}

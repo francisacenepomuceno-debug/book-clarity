@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { startOnboarding } from "@/onboarding/start";
+import { startOnboarding, waiveOnboardingFee } from "@/onboarding/start";
 
 export type StartFormResult = { ok?: boolean; error?: string; url?: string };
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
@@ -20,4 +20,11 @@ export async function startOnboardingAction(_: StartFormResult, f: FormData): Pr
   if (!r.ok) return { error: r.error };
   revalidatePath("/onboarding");
   return { ok: true, url: r.url };
+}
+
+export async function waiveFeeAction(_: StartFormResult, f: FormData): Promise<StartFormResult> {
+  const r = await waiveOnboardingFee(String(f.get("onboardingId") ?? ""));
+  if (!r.ok) return { error: r.error };
+  revalidatePath("/onboarding");
+  return { ok: true };
 }

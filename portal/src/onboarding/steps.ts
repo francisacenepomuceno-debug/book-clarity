@@ -99,7 +99,7 @@ export async function contractPreview(l: Loaded, now: Date = new Date()) {
     state: d.state ?? "",
     zip: d.zip ?? "",
     signer_name: d.signerName ?? "",
-    onboarding_fee: formatUsd(l.onboarding.onboardingFeeCents ?? l.pkg.onboardingFeeCents),
+    onboarding_fee: (l.onboarding.onboardingFeeCents ?? l.pkg.onboardingFeeCents) === 0 ? "$0.00 (waived)" : formatUsd(l.onboarding.onboardingFeeCents ?? l.pkg.onboardingFeeCents),
     monthly_amount: formatUsd(l.onboarding.monthlyCents ?? l.pkg.monthlyPriceCents),
   };
   const choices = [...c.template.matchAll(/\{\{choice:quickbooks\|([^}]*)\}\}/g)][0]?.[1].split("|") ?? [];

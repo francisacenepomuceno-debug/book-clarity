@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { can, requirePermission } from "@/auth/permissions";
+import { can, ForbiddenError, requirePermission } from "@/auth/permissions";
 import { writeAudit } from "@/audit/log";
 import { signLink, verifyLink } from "@/lib/links";
 import { sendNotice } from "@/notify/send";
@@ -72,4 +72,28 @@ export async function startOnboarding(i: StartInput): Promise<ActionResult<{ onb
   const t = templates.onboardingInvite({ name, url });
   await sendNotice({ key: `onboarding-invite:${onboarding.id}`, kind: "onboarding-invite", clientId: client.id, to: { name, email, phone: client.phone }, email: t, sms: t.sms });
   return { ok: true, onboardingId: onboarding.id, clientId: client.id, url };
+}
+
+/**
+ * Owners: waive a new client's onboarding fee (Jose sometimes does). Allowed until a fee invoice exists or the fee
+ * is paid. The client still saves a bank account or card for autopay; billing starts 14 days after that.
+ * A copy the client already signed keeps the fee it showed; the waiver is in the audit log.
+ */
+export async function waiveOnboardingFee(onboardingId: string): Promise<ActionResult> {
+  let actor;
+  try {
+    actor = await requirePermission("discounts.apply");
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { ok: false, error: "Only Owners can waive the onboarding fee." };
+    throw e;
+  }
+  const o = await db.onboarding.findUnique({ where: { id: onboardingId } });
+  if (!o) return { ok: false, error: "Onboarding not found." };
+  const done = await db.onboarding.updateMany({
+    where: { id: onboardingId, feePaidAt: null, feeSubmittedAt: null, feeInvoiceId: null, completedAt: null },
+    data: { onboardingFeeCents: 0 },
+  });
+  if (done.count !== 1) return { ok: false, error: "The fee can't be waived now: the client has already paid it or a payment is under way." };
+  await writeAudit({ actorId: actor.id, action: "onboarding_fee_waived", entity: "Onboarding", entityId: onboardingId, after: { previousCents: o.onboardingFeeCents } });
+  return { ok: true };
 }
