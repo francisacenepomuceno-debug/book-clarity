@@ -2,6 +2,7 @@ import "server-only";
 import type Stripe from "stripe";
 import { getStripe } from "@/stripe/client";
 import { mapSubscription, type LiveClientRow } from "@/stripe/mapSubscription";
+import { syncClientsFromSnapshot } from "@/clients/queries";
 
 export type LiveSnapshot = { rows: LiveClientRow[]; fetchedAt: Date; livemode: boolean };
 
@@ -31,5 +32,6 @@ export async function getLiveSnapshot(force = false): Promise<LiveSnapshot> {
     fetchedAt: now,
     livemode: subs[0]?.livemode ?? false,
   };
+  await syncClientsFromSnapshot(cache.rows);
   return cache;
 }
