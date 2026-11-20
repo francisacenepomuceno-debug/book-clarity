@@ -7,9 +7,9 @@ import { STATUS_LABEL } from "@/domain/clientStatus";
 import { formatUsd } from "@/lib/money";
 import { db } from "@/lib/db";
 import { PortalHeader } from "@/app/PortalHeader";
-import { fmtDate, todayInTz } from "@/lib/format";
-import { commissionProgress } from "@/commissions/statements";
-import { CommissionForm } from "@/app/commissions/Forms";
+import { fmtDate, } from "@/lib/format";
+import { CommissionSection } from "./CommissionSection";
+import { PortalClientPage } from "./PortalClientPage";
 import { DiscountForm } from "./DiscountForm";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +18,7 @@ export default async function ClientPage({ params }: { params: Promise<{ subscri
   const viewer = await requirePermission("clients.view");
   const money = can(viewer.role, "clients.viewFinancials");
   const { subscriptionId } = await params;
+  if (!subscriptionId.startsWith("sub_")) return <PortalClientPage clientId={subscriptionId} viewer={viewer} />;
 
   const snap = await getLiveSnapshot();
   const live = snap.rows.find((r) => r.subscriptionId === subscriptionId);
@@ -26,17 +27,11 @@ export default async function ClientPage({ params }: { params: Promise<{ subscri
 
   const invoices = money ? (await getStripe().invoices.list({ subscription: subscriptionId, limit: 12 })).data : [];
   const client = await db.client.findUnique({ where: { stripeSubscriptionId: subscriptionId } });
-  const showCommission = can(viewer.role, "commissions.view") && client !== null;
-  const progress = showCommission ? await commissionProgress(client!.id) : null;
-  const executives = showCommission ? await db.executive.findMany({ where: { active: true }, orderBy: { name: "asc" } }) : [];
-  const currentShares = progress
-    ? progress.split.map((s) => ({ executiveId: executives.find((e) => e.name === s.executiveName)?.id ?? "", ratePercent: s.ratePercent }))
-    : [];
   const discounts = money && client ? await db.discount.findMany({ where: { clientId: client.id }, orderBy: { createdAt: "desc" }, take: 5 }) : [];
 
   return (
     <>
-      <PortalHeader showCommissionsLink={can(viewer.role, "commissions.view")} showUsersLink={can(viewer.role, "users.manage")} viewerName={viewer.name} />
+      <PortalHeader role={viewer.role} viewerName={viewer.name} />
       <main>
         <p><a href="/">← All clients</a></p>
         <h2 style={{ marginBottom: 4 }}>{r.name}</h2>
@@ -95,29 +90,10 @@ export default async function ClientPage({ params }: { params: Promise<{ subscri
             </section>
           </>
         )}
-        {progress && (
-          <section className="panel pad" id="commission" style={{ marginTop: 16 }}>
-            <h3>Commission</h3>
-            <p className="muted">
-              {progress.split.length > 0
-                ? `Now: ${progress.split.map((s) => `${s.executiveName} ${s.ratePercent}%`).join(" + ")} · `
-                : "No commission owner yet · "}
-              {progress.earnedMonths} of {progress.windowMonths} paid months earned · {progress.remainingMonths} left
-            </p>
-            {can(viewer.role, "commissions.markPaid") &&
-              (executives.length === 0 ? (
-                <p className="muted">Add executives on the <a href="/commissions">Commissions</a> page first.</p>
-              ) : (
-                <CommissionForm
-                  subscriptionId={subscriptionId}
-                  executives={executives.map((e) => ({ id: e.id, name: e.name }))}
-                  current={currentShares}
-                  monthsBeforePortal={client!.commissionMonthsBeforePortal}
-                  today={todayInTz()}
-                />
-              ))}
-          </section>
+        {client?.type === "ACE" && client.acePrepaidUntil && (
+          <p className="muted">ACE client · prepaid until {fmtDate(client.acePrepaidUntil)}</p>
         )}
+        {client && <CommissionSection clientId={client.id} formKey={subscriptionId} role={viewer.role} />}
       </main>
     </>
   );

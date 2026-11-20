@@ -45,9 +45,10 @@ export async function listStatements(): Promise<StatementRow[]> {
 export async function statementLines(executiveId: string, month: string) {
   await requirePermission("commissions.view");
   const entries = await db.commissionEntry.findMany({ where: { executiveId, month }, orderBy: [{ occurredAt: "asc" }, { kind: "asc" }] });
-  const clients = await db.client.findMany({ where: { id: { in: [...new Set(entries.map((e) => e.clientId))] } }, select: { id: true, name: true } });
+  const clients = await db.client.findMany({ where: { id: { in: [...new Set(entries.map((e) => e.clientId))] } }, select: { id: true, name: true, type: true } });
   const invoices = await db.invoice.findMany({ where: { id: { in: entries.map((e) => e.invoiceId) } }, select: { id: true, stripeInvoiceId: true } });
   const clientName = new Map(clients.map((c) => [c.id, c.name]));
+  const clientType = new Map(clients.map((c) => [c.id, c.type]));
   const stripeId = new Map(invoices.map((i) => [i.id, i.stripeInvoiceId]));
   return entries.map((e) => ({
     clientName: clientName.get(e.clientId) ?? "(unknown client)",
@@ -58,6 +59,7 @@ export async function statementLines(executiveId: string, month: string) {
     rateBp: e.rateBp,
     amountCents: e.amountCents,
     windowIndex: e.windowIndex,
+    windowMonths: windowMonthsFor({ type: clientType.get(e.clientId) ?? "DIRECT" }),
   }));
 }
 

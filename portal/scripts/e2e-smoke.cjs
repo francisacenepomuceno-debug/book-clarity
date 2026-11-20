@@ -76,6 +76,47 @@ async function login(browser, email, password, totpSecret) {
     await owner.waitForSelector("#commission .form-ok, #commission .form-error", { timeout: 60000 });
     check("owner can set a client's commission owner", await owner.isVisible("#commission .form-ok"));
 
+    // ACE (local DB only; the batch is "already paid", so nothing is written to Stripe)
+    check("owner sees ACE and Packages links", (await owner.isVisible("header a[href='/ace']")) && (await owner.isVisible("header a[href='/settings/packages']")));
+    await owner.goto(`${BASE}/settings/packages`);
+    await owner.waitForSelector("h2");
+    if (!(await owner.isVisible("h3:has-text('Smoke Growth')"))) {
+      const add = owner.locator("section:has(h3:text('Add a package')) form");
+      await add.locator("input[name=name]").fill("Smoke Growth");
+      await add.locator("input[name=monthly]").fill("650");
+      await add.locator("input[name=onboarding]").fill("500");
+      await add.locator("button").click();
+      await owner.waitForSelector("h3:has-text('Smoke Growth')", { timeout: 60000 });
+    }
+    check("owner can keep the package price list", await owner.isVisible("h3:has-text('Smoke Growth')"));
+    await owner.goto(`${BASE}/ace`);
+    await owner.waitForSelector("h2");
+    await owner.selectOption("select[name=pkg0]", { label: "Smoke Growth" });
+    await owner.fill("input[name=qty0]", "1");
+    await owner.fill("input[name=price0]", "4400");
+    await owner.check("input[name=alreadyPaid]");
+    await owner.fill("input[name=reference]", "Smoke check");
+    await owner.click("form.stack-form button");
+    await owner.waitForSelector("text=Open it to assign clients", { timeout: 60000 });
+    await owner.click("text=Open it to assign clients");
+    await owner.waitForSelector("h3:has-text('Assign a client')");
+    const aceName = `Smoke ACE ${Date.now()}`;
+    await owner.fill("input[name=newName]", aceName);
+    await owner.click("form.stack-form button");
+    await owner.waitForSelector(`a:has-text('${aceName}')`, { timeout: 60000 });
+    check("owner can put a new client in an ACE slot", await owner.isVisible(`tr:has-text('${aceName}') >> text=Prepaid by ACE`));
+    await owner.click(`a:has-text('${aceName}')`);
+    await owner.waitForSelector("#commission");
+    await owner.selectOption("#commission select[name=exec1]", { label: "Smoke Exec" });
+    await owner.fill("#commission input[name=rate1]", "10");
+    await owner.click("#commission button");
+    await owner.waitForSelector("#commission .form-ok", { timeout: 60000 });
+    await owner.goto(`${BASE}/commissions`);
+    await owner.waitForSelector("h2");
+    await owner.locator("tr:has-text('Smoke Exec') a").first().click();
+    await owner.waitForSelector("h2");
+    check("ACE months 1–6 commission shows on the statement", await owner.isVisible("text=ACE months 1–6"));
+
     // Admin
     const pw = randomBytes(12).toString("hex");
     const salt = randomBytes(16);
@@ -92,6 +133,10 @@ async function login(browser, email, password, totpSecret) {
     check("admin client page has no invoices", !(await admin.isVisible("th:has-text('Invoice')")));
     check("admin client page has no commission section", !(await admin.isVisible("#commission")));
     check("admin has no Commissions link", !(await admin.isVisible("header a[href='/commissions']")));
+    check("admin sees ACE clients on the dashboard but no ACE link", (await admin.goto(`${BASE}/?status=PREPAID_ACE`), await admin.waitForSelector(".kpi"), (await admin.locator("tbody tr:has-text('Smoke ACE')").count()) > 0 && !(await admin.isVisible("header a[href='/ace']"))));
+    await admin.goto(`${BASE}/ace`);
+    await admin.waitForLoadState("networkidle");
+    check("admin cannot open the ACE page", await admin.isVisible("text=isn't available"));
     await admin.goto(`${BASE}/commissions`);
     await admin.waitForLoadState("networkidle");
     check("admin cannot open the commissions page", !(await admin.isVisible("text=Unpaid commission")) && (await admin.isVisible("text=isn't available")));

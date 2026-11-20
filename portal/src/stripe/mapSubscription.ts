@@ -3,6 +3,7 @@ import { deriveClientStatus, type ClientStatus } from "@/domain/clientStatus";
 import { classifyProduct } from "@/stripe/catalog";
 
 export type LiveClientRow = {
+  clientType?: "DIRECT" | "ACE";
   customerId: string;
   subscriptionId: string;
   name: string;

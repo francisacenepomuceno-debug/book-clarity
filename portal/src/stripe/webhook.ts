@@ -19,6 +19,12 @@ export type WebhookDeps = {
   getInvoiceIdForCharge?: (charge: Stripe.Charge) => Promise<string | null>;
   /** Called once per newly seen refund; the commission engine claws back from it. */
   onRefund?: (invoiceRowId: string, refund: RefundInfo) => Promise<void>;
+  /** ACE paid a batch invoice (metadata.kind = ACE_BATCH). */
+  onAceBatchPaid?: (inv: Stripe.Invoice) => Promise<void>;
+  /** An ACE client finished the setup link (checkout.session.completed, ACE_CONTINUATION). */
+  onAceSetupCompleted?: (session: Stripe.Checkout.Session) => Promise<void>;
+  /** ACE saved a card to pay a batch (checkout.session.completed, ACE_BATCH_CARD). */
+  onAceCardSetupCompleted?: (session: Stripe.Checkout.Session) => Promise<void>;
 };
 
 /** An unfinished attempt older than this is assumed dead and may be retried. */
@@ -39,6 +45,7 @@ const HANDLED = new Set([
   "customer.subscription.deleted",
   "customer.updated",
   "charge.refunded",
+  "checkout.session.completed",
 ]);
 
 /** Verified events only. Idempotent by event.id; a failed handler un-records the event so Stripe's retry runs. */
@@ -80,6 +87,7 @@ async function dispatch(event: Stripe.Event, deps: WebhookDeps): Promise<void> {
     }
     case "invoice.paid": {
       const inv = obj as Stripe.Invoice;
+      if (inv.metadata?.kind === "ACE_BATCH") return deps.onAceBatchPaid?.(inv);
       const paid = await deps.getPaidMethod(inv);
       const row = await upsertInvoiceFromStripe(inv, { paid });
       if (row?.clientId) await refreshClientStatus(row.clientId);
@@ -105,6 +113,12 @@ async function dispatch(event: Stripe.Event, deps: WebhookDeps): Promise<void> {
       return onSubscriptionChanged(obj as Stripe.Subscription, false);
     case "customer.subscription.deleted":
       return onSubscriptionChanged(obj as Stripe.Subscription, true);
+    case "checkout.session.completed": {
+      const session = obj as Stripe.Checkout.Session;
+      if (session.metadata?.kind === "ACE_CONTINUATION") await deps.onAceSetupCompleted?.(session);
+      if (session.metadata?.kind === "ACE_BATCH_CARD") await deps.onAceCardSetupCompleted?.(session);
+      return;
+    }
     case "charge.refunded":
       return onChargeRefunded(obj as Stripe.Charge, deps);
     case "customer.updated":

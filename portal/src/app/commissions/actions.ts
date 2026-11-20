@@ -26,7 +26,10 @@ export async function markPaidAction(_: FormResult, form: FormData): Promise<For
 
 export async function setCommissionAction(_: FormResult, form: FormData): Promise<FormResult> {
   const subscriptionId = String(form.get("subscriptionId") ?? "");
-  const client = await db.client.findUnique({ where: { stripeSubscriptionId: subscriptionId }, select: { id: true } });
+  // The form key is the Stripe subscription id, or the portal client id for clients without one (ACE).
+  const client = subscriptionId.startsWith("sub_")
+    ? await db.client.findUnique({ where: { stripeSubscriptionId: subscriptionId }, select: { id: true } })
+    : await db.client.findUnique({ where: { id: subscriptionId }, select: { id: true } });
   if (!client) return { error: "Client not found. Refresh and try again." };
   const shares = [1, 2]
     .map((i) => ({ executiveId: String(form.get(`exec${i}`) ?? ""), ratePercent: Number(form.get(`rate${i}`)) }))

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { ForbiddenError, requirePermission } from "@/auth/permissions";
 import { validateSplit } from "@/domain/commission";
 import { recomputeClient } from "@/commissions/engine";
+import { postAceCommission } from "@/ace/slots";
 import { writeAudit } from "@/audit/log";
 import type { ActionResult } from "@/billing/discounts";
 
@@ -80,6 +81,8 @@ export async function setClientCommission(
     after: { shares, effectiveFrom: input.effectiveFrom, monthsBeforePortal: input.monthsBeforePortal ?? client.commissionMonthsBeforePortal },
   });
   await recomputeClient(clientId);
+  const slot = await db.aceSlot.findUnique({ where: { clientId }, select: { id: true } });
+  if (slot) await postAceCommission(slot.id);
   return { ok: true };
 }
 

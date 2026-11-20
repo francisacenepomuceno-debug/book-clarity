@@ -16,7 +16,7 @@ export default async function StatementPage({ params }: { params: Promise<{ exec
 
   return (
     <>
-      <PortalHeader viewerName={viewer.name} showUsersLink={can(viewer.role, "users.manage")} showCommissionsLink />
+      <PortalHeader role={viewer.role} viewerName={viewer.name} />
       <main>
         <p><a href="/commissions">← Commissions</a></p>
         <h2>{summary.executiveName} · {fmtMonth(month)}</h2>
@@ -33,8 +33,8 @@ export default async function StatementPage({ params }: { params: Promise<{ exec
                 <tr key={i}>
                   <td>{fmtDate(l.occurredAt)}</td>
                   <td>{l.clientName}</td>
-                  <td>{l.kind === "EARNED" ? "Payment" : "Refund (clawback)"}</td>
-                  <td>{l.windowIndex ? `${l.windowIndex} of 12` : "—"}</td>
+                  <td>{l.kind === "EARNED" ? "Payment" : l.kind === "ACE_PREPAID" ? "ACE months 1–6" : "Refund (clawback)"}</td>
+                  <td>{l.kind === "ACE_PREPAID" ? "1–6" : l.windowIndex ? `${l.windowIndex} of ${l.windowMonths}` : "—"}</td>
                   <td className="num">{formatUsd(l.baseCents)}</td>
                   <td className="num">{l.rateBp / 100}%</td>
                   <td className="num">{formatUsd(l.amountCents)}</td>
