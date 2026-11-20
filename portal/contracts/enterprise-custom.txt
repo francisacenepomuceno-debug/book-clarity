@@ -1,0 +1,204 @@
+Contract Agreement
+Date: {{date}}
+Client: {{client_name}}
+Phone Number: {{phone}}
+Address Line 1: {{address1}}
+Address Line 2: {{address2}}
+City: {{city}}
+State: {{state}}
+Zip/Postal: {{zip}}
+
+{{check:confirm_details}} I can confirm the above details are correct.
+By signing this Agreement, {{client_name}} ("Client") has retained
+Book Clarity, LLC, ("Service Provider") to proceed with the requested services and agrees to the terms and conditions as set forth within this agreement.
+
+Welcome {{client_name}}
+
+Dear {{client_first_name}},
+Welcome to Book Clarity! We're thrilled to embark on this financial journey with you and your business.
+At Book Clarity, we understand that your passion lies in your service, not in spreadsheets and financial statements. That's where we come in. Our team of expert bookkeepers is dedicated to transforming your financial data into clear, actionable insights that fuel your business growth.
+We believe that quality bookkeeping is more than just number-crunching—it's about creating a solid foundation for your entrepreneurial vision. Our commitment to precision, timeliness, and personalized service ensures that you'll always have an accurate picture of your financial health, allowing you to make informed decisions with confidence.
+Your success is our success. We're not just here to balance your books; we're here to be your financial partners. Whether you're looking to streamline your operations, plan for expansion, or simply gain peace of mind about your finances, we're here to support you every step of the way.
+Our onboarding process is designed to be smooth and stress-free. In the coming days, we'll work closely with you to understand your unique needs and tailor our services accordingly.
+You'll have a dedicated bookkeeper who will become intimately familiar with your business, ensuring continuity and personalized attention.
+We're excited to help you unlock the full potential of your business through smart financial management. With Book Clarity by your side, you can focus on what you do best—serving your clients and growing your business—while we take care of the numbers.
+Thank you for choosing Book Clarity. We look forward to celebrating your successes and helping you navigate any challenges that lie ahead.
+Here's to your financial clarity and business prosperity!
+Warm regards,
+
+Jose A. Cortes | CEO Book Clarity
+
+BOOKKEEPING ENTERPRISE CUSTOM PROGRAM
+CONTRACT SERVICES
+PLEASE READ CAREFULLY
+Agreed Upon Services for Monthly Bookkeeping Maintenance ENTERPRISE:
+Monthly bookkeeping services
+Monthly standard reporting based on criteria established for your business
+Dedicated Bookkeeper
+Financial statements: P&L, Balance Sheet, Expense Summaries o Produced Monthly and Quarterly
+Monthly Review Session with your designated bookkeeper
+Transaction Categorization
+Reconciliation
+Monthly Reporting
+Profit & Loss Statement Monthly
+Profit & Loss Statement Quarterly
+Balance Sheet
+Monthly Review Session
+Weekly Bookkeeping Sessions
+Bi- Annual Planning Session
+Tax Return Review
+Accounts Receivable Weekly Review
+Accounts Payable Weekly Review
+Third-Party Software Integrations
+Business Capital Planning
+Debt Strategy
+Tax Planning
+Tax Strategy
+Meetings with your CPA
+Agree that this is an annual contract. We require a 30-Day Cancelation Policy.
+You will have a final billing after you request the cancellation of services. You can submit your cancellation at any point throughout your term with Book Clarity.
+Agree to have the account reviewed for potential adjustment to the monthly retainer in 6 months based on a significant increase in client transactions, volume, or business changes.
+Monthly billing for all Bookkeeping Retainers begins 14 days after the onboarding fee is paid and recurs on that same date each month (your monthly billing date).
+Your first invoice will include the following for Monthly Bookkeeping Services:
+Your onboarding fee of {{onboarding_fee}} is charged when you sign up. Your first monthly retainer of {{monthly_amount}} is charged 14 days later, on your monthly billing date.
+It is required to set up Auto-Pay for monthly billing via bank account (ACH, no processing fee), debit card or credit card.
+All invoices are automatically billed on your monthly billing date. If your retainer is
+
+declined, you will have a five-day grace period to settle your account. If your retainer is not resolved within five days of your monthly billing date, all work will stop at this point. We will then transfer ownership of your documents to you, and if you are under our wholesale billing for QuickBooks Online, we will transfer ownership of your QuickBooks file to you at that time.
+This action cannot be reversed. The 21-day transitional period will begin upon completing your Book Clarity Onboarding Checklist. It is essential that you, the client, are active participants as we will need to gain access to your information.
+
+Necessary Information & Materials:
+The Client will be solely responsible for supplying Book Clarity, LLC with all information, materials, data, and documents necessary to perform the Services outlined in this
+Agreement. The Client acknowledges and agrees that the accuracy of financial information supplied to Book Clarity, LLC is the sole responsibility of the Client. Book Clarity, LLC shall not be held responsible for the production of inaccurate financial statements, records, and billings, or any other financial reports if the financial data submitted by the Client is inaccurate. Book Clarity, LLC shall be entitled to rely on the accuracy and completeness of all information and documentation provide by the Client, and Book Clarity, LLC has no duty to verify same.
+Standard of Performance:
+Book Clarity, LLC hereby agrees that it shall follow professional standards in performing all
+Services to be provided under this Agreement.
+Term and Renewal:
+This Agreement shall renew automatically on a month-to-month basis. Either Party may terminate at any time with thirty (30) days’ written notice. Book Clarity shall provide at least sixty (60) days’ prior written notice of any fee change or rate adjustment. No automatic price increase shall take effect without prior sixty (60) days written notice to the Client.
+Independent Contractor/Vendor:
+Book Clarity, LLC shall provide the Services to the Client as an independent contractor/vendor and shall not be deemed an employee, agent, or broker of the Client. As an independent contractor, Book Clarity, LLC will be solely responsible for paying any and all taxes levied by applicable laws on its compensation. Book Clarity, LLC understands that the Client will not withhold any amounts for payment of any taxes from Book Clarity, LLC's compensation.
+Third-Party Independent Contractors/Subcontractors:
+While providing professional services under this Agreement, Book Clarity, LLC may engage third-party contractors only after obtaining the Client’s prior written consent. Book Clarity shall ensure that any subcontractor or third-party service provider is bound by a written confidentiality and data-protection agreement at least as restrictive as this Agreement. Client agrees that only essential information may be transferred or accessed outside the United
+States for the sole purpose of completing the necessary work requested in the course of providing services. Any such transfer shall be limited, secure, and compliant with all applicable privacy laws. Book Clarity remains fully responsible for the acts, omissions, and performance of any approved subcontractor to the same extent as if the services were performed directly by Book Clarity.
+
+Indemnification:
+Each Party agrees to indemnify, defend, and hold the other Party harmless from any claims, losses, or damages arising out of its own negligence, willful misconduct, or breach of this
+Agreement. The Client shall not be required to indemnify Book Clarity for claims resulting from Book Clarity’s or its subcontractors’ errors, omissions, or negligence.
+Confidentiality:
+Book Clarity, LLC, in the course of performing the Services hereunder, may gain access to certain confidential or proprietary information of the Client. Such “Confidential Information” shall include all information concerning the business, affairs, products, marketing, systems, technology, customers, end-users, financial affairs, accounting, statistical data belonging to the Client and any data, documents, discussion, or other information developed by Book
+Clarity, LLC hereunder and any other proprietary and trade secret information of the Client whether in oral, graphic, written, electronic or machine-readable form. Book Clarity, LLC agrees to hold all such Confidential Information of the Client in strict confidence and shall not, without the express prior written permission of the client, (a) disclose such Confidential
+Information to third parties; or (b) use such Confidential Information for any purposes whatsoever, other than the performance of its obligations hereunder. The obligations under this Section shall survive the termination or expiration of this Agreement.
+Assignment:
+Book Clarity, LLC has the right to assign any of their rights under this Agreement or delegate the performance of any of the obligations or duties hereunder, to outside contractors that have been vetted rigorously by Book Clarity, LLC and will remain managed by Book Clarity,
+LLC.
+Dispute Resolution:
+Any dispute arising under or in connection with this Agreement shall be resolved by binding arbitration administered by the American Arbitration Association under its Commercial Rules.
+The arbitration shall be conducted remotely via secure electronic means, unless both Parties agree to a specific venue. Either Party may seek judicial review for manifest error or enforcement. Each Party shall bear its own costs and share arbitration fees equally.
+Delivery of Records upon Termination:
+Upon termination for any reason, Book Clarity shall deliver all Client records and data in a usable electronic format within thirty (30) business days and shall permanently delete any copies retained, except as required by law.
+Billing and Payments:
+Book Clarity LLC will bill the Client on a monthly ongoing basis. Client agrees to review and sign payment authorization form provided in the document herein. Billing will occur monthly from your designated monthly billing date for services offered and performed until the following billing date.
+Late Payment and Suspension of Services:
+Book Clarity LLC will provide the client a 10 Day grace period from the billing date. Should
+Client fail to make timely payment, Book Clarity LLC at its sole discretion, has the authority herein to apply a 10% late penalty payment based on the amount of the monthly billing plan.
+Should the client fail to get current prior to the next monthly billing date, Book Clarity LLC has the authority to suspend service immediately until the account is made current. Should the client wish to restart services, Book Clarity LLC can at its sole discretion charge an additional onboarding fee or Month in arrears to account for the adequate workload in getting the account financials current.
+
+Limitation of Liability:
+Except in cases of gross negligence, willful misconduct, or breach of confidentiality, neither
+Party shall be liable for indirect or consequential damages. Each Party’s total liability shall not exceed the greater of (a) the total fees paid under this Agreement during the previous twelve(12) months or (b) the limits of the applicable professional-liability insurance.
+Governing Law:
+This Agreement is to be construed in accordance with and governed by the internal laws of the State of Georgia, USA.
+Entire Agreement:
+This Agreement constitutes the entire understanding between the Parties and supersedes all prior agreements or understandings, whether oral or written.
+Construction of Agreement: If any part of this Agreement shall be declared void or unenforceable, such interpretation shall not affect the validity or enforceability of the remainder of this Agreement. The clause headings in this Agreement are for convenience only. They do not purport to and shall not be construed to define, limit, or extend the scope of this Agreement. The failure of a party to this Agreement to insist upon strict performance of the terms and conditions hereof shall not constitute a waiver of that party’s right to enforce the same in the event of a continuing or subsequent default on the part of the other party.
+Amendment: Any amendments to this Agreement must be in writing and signed by both
+Parties.
+
+DATA SECURITY, PRIVACY & CLIENT INFORMATION
+1. Protection of Client Information
+Book Clarity recognizes the confidential nature of the financial, business, and personal information provided by Client in connection with the Services (“Client Information”).
+Book Clarity will maintain reasonable administrative, technical, and organizational safeguards designed to protect Client Information against unauthorized access, use, disclosure, alteration, or loss.
+Such safeguards may include, as appropriate, multi-factor authentication, individual user accounts, endpoint protection, device encryption, firewalls, access controls, secure filestorage practices, and employee security requirements.
+2. Remote Work and Authorized Devices
+Client acknowledges that Book Clarity operates with a remote workforce and that authorized employees and contractors may access Client Information from appropriately secured, personally owned or company-approved computers and devices.
+Book Clarity maintains minimum security requirements for devices used to access Client
+Information, including supported operating systems, current security updates, active endpoint or malware protection, device firewalls, secure authentication, screen-lock protections, and device encryption where supported.
+3. Access Controls
+Book Clarity will seek to limit access to Client Information to employees, contractors, and service providers who reasonably require such access to perform the Services or support
+Book Clarity's business operations.
+Book Clarity employees and contractors are required to use individually assigned accounts where reasonably available and to comply with Book Clarity's applicable confidentiality, authentication, device-security, and data-handling requirements.
+4. Third-Party Service Providers
+Client acknowledges and authorizes Book Clarity to use reputable third-party technology and service providers as reasonably necessary to provide, administer, secure, or support the
+Services.
+Such providers may include, without limitation, Google Workspace, Double, QuickBooks
+Online/Intuit, financial institutions, payroll platforms, payment processors, client portals, password-management services, cloud-storage providers, and other accounting, financial, communications, security, or business technology providers.
+Client Information may be processed, transmitted, or stored through these third-party systems as reasonably necessary to provide the Services.
+Book Clarity will use reasonable care in selecting and using third-party service providers but does not control the independent security practices, systems, availability, or operations of such providers.
+
+5. Double
+Book Clarity may use Double as part of its bookkeeping workflow, client communication, document management, financial-data processing, and related services.
+Double maintains its own security, privacy, infrastructure, and data-processing practices.
+Client acknowledges that information necessary to provide Book Clarity's Services may be transmitted to, processed by, or stored within Double.
+Certain Double features may incorporate artificial intelligence or third-party technology providers. Use of such features will be subject to the applicable provider's security, privacy, contractual, and data-processing practices.
+6. Google Workspace and Approved Storage
+Book Clarity may use Google Workspace and other approved business systems for company email, collaboration, document management, and storage.
+Book Clarity personnel are instructed to maintain Client Information within approved Book
+Clarity, Client, accounting, financial, or service-provider systems whenever reasonably practical and to avoid unnecessary storage of Client Information in unauthorized personal accounts or services.
+7. Client Responsibilities
+Client is responsible for maintaining reasonable security over Client's own accounts, devices, systems, employees, and credentials.
+Client agrees to:
+Protect passwords, authentication codes, and account credentials;
+Enable multi-factor authentication where reasonably available and recommended;
+Maintain accurate authorized-user information;
+Promptly remove access for former employees or unauthorized users under Client's control;
+Notify Book Clarity promptly of suspected unauthorized access, compromised credentials, fraud, phishing, or other security incidents that may affect Book Clarity's
+Services or Client Information;
+Use reasonable care when transmitting confidential information to Book Clarity; and
+Maintain appropriate security over Client-controlled accounting, banking, payroll, tax, and financial systems.
+Client will not knowingly provide Book Clarity personnel with another individual's credentials when the applicable platform permits the creation of separate authorized-user access.
+8. Security Incidents
+If Book Clarity becomes aware of a security incident involving Client Information under Book
+Clarity's control, Book Clarity will take reasonable steps appropriate to the circumstances to investigate, contain, and remediate the incident.
+Book Clarity will provide notification to Client when required by applicable law or when Book
+Clarity determines that notification is reasonably appropriate under the circumstances.
+Client agrees to reasonably cooperate with Book Clarity in responding to security incidents involving systems or accounts controlled by Client.
+
+9. No Guarantee of Absolute Security
+Client acknowledges that no computer system, cloud service, communication method, network, device, or security program can guarantee complete security or eliminate all risk of unauthorized access, cyberattack, data loss, service interruption, or other security incidents.
+Accordingly, while Book Clarity will maintain reasonable safeguards designed to protect
+Client Information, Book Clarity does not represent or warrant that its systems or those of its third-party service providers are immune from all security incidents, failures, vulnerabilities, or unauthorized access.
+10. Electronic Communications
+Client authorizes Book Clarity to communicate electronically and to transmit information through email, approved cloud platforms, client portals, accounting systems, and other electronic methods reasonably necessary to provide the Services.
+Client acknowledges that electronic communications inherently involve security risks and agrees to promptly notify Book Clarity if Client requires a particular communication method to be discontinued due to a known security concern.
+11. Access Upon Termination
+Upon termination of the Services, Book Clarity may revoke Client-related access granted to
+Book Clarity personnel and discontinue access to systems provided through Book Clarity.
+Book Clarity may retain Client Information to the extent reasonably necessary for legal, regulatory, contractual, accounting, backup, dispute-resolution, or legitimate business purposes, subject to applicable law and Book Clarity's retention practices.
+Client remains responsible for maintaining its own original records and copies of financial, tax, accounting, and business documents required for Client's operations or legal obligations.
+12. Continuing Confidentiality
+Book Clarity's obligations regarding the confidentiality and appropriate handling of Client
+Information will survive termination of the Services to the extent required by applicable law, contractual obligations, and Book Clarity's applicable confidentiality requirements.
+For more information, click here.
+
+Please make sure you select accordingly based on your business needs. All monthly bookkeeping services are retainer-based.
+
+Auto Payment Authorization:
+I {{signer_name}} authorize Book Clarity, LLC to electronically debit my bank account or credit card account used through the secure payment portal with Stripe for the onboarding fee invoice upon signing, in the amount of {{onboarding_fee}}, and to continue auto-debiting the amount of {{monthly_amount}} each month on my monthly billing date (14 days after the onboarding fee is paid) thereafter. This payment authorization will remain in effect until Book Clarity, LLC makes any changes, at which time I will complete a new monthly auto-debit authorization.
+Any changes to my account or billing information must be provided to Book Clarity, LLC.
+Book Clarity, LLC does not guarantee that such changes will be applied before the next billing cycle without at least five (5) business days’ notice and a signed billing change form.
+I also confirm that I understand that if I choose to pay with a credit card, a 3% credit card processing fee will be included in the invoice.
+I also confirm that I understand that I am authorizing my billing to be paid monthly on an auto bill subscription basis. And I am solely responsible for any overdrafts or fees should that monthly draft cause any overdrafts by billing billed on the agreed upon monthly billing date.
+{{check:agree_autopay}} I agree to the terms above.
+
+{{choice:quickbooks|I have a QuickBooks Online Account Currently.|I do not have a QuickBooks Account and will need Book Clarity to open one}}
+One of the benefits of rolling into your subscription with Book Clarity, LLC is that your
+QuickBooks subscription will become part of your monthly retainer. If you do not have an existing QuickBooks Online Account, you will be charged for the QuickBooks plan fit for you, but paying a discounted wholesale price instead of the retail price for the period of time you are a client of Book Clarity, LLC. At which time, the client's QuickBooks subscription will be turned over to the client and billing will be removed from Book Clarity, LLC.
+
+SIGNATURES
+Client:
+I agree to the terms and conditions of this contract.
+{{signature:client}}
+
+Service Provider:
+I agree to the terms and conditions of this contract.
+{{signature:provider}}

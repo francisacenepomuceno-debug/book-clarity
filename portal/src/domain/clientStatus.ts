@@ -8,6 +8,7 @@ export type ClientStatus =
   | "PAST_DUE"
   | "AT_RISK"
   | "PAUSED"
+  | "SUSPENDED"
   | "CONTINUING_AWAITING_PM"
   | "ENDED";
 
@@ -15,6 +16,8 @@ export type StatusInput = {
   type: ClientType;
   endedAt: Date | null;
   paused: boolean;
+  /** Collection paused by the portal after N days unpaid (Plan 4B). */
+  suspended?: boolean;
   onboardingComplete: boolean;
   acePrepaidUntil: Date | null;
   continuingAwaitingPm: boolean;
@@ -33,6 +36,7 @@ export function deriveClientStatus(i: StatusInput): ClientStatus {
   if (i.endedAt) return "ENDED";
   if (!i.onboardingComplete) return "ONBOARDING";
   if (i.acePrepaidUntil && i.acePrepaidUntil > i.now) return "PREPAID_ACE";
+  if (i.suspended) return "SUSPENDED";
   if (i.paused) return "PAUSED";
   if (i.continuingAwaitingPm) return "CONTINUING_AWAITING_PM";
   const inv = i.latestInvoice;
@@ -54,6 +58,7 @@ export const STATUS_LABEL: Record<ClientStatus, string> = {
   PAST_DUE: "Past due",
   AT_RISK: "At risk",
   PAUSED: "Paused",
+  SUSPENDED: "Suspended (unpaid)",
   CONTINUING_AWAITING_PM: "Continuing: awaiting payment method",
   ENDED: "Ended",
 };

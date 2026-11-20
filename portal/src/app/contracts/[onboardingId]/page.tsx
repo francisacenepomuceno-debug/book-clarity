@@ -1,0 +1,38 @@
+import { notFound } from "next/navigation";
+import { requirePermission } from "@/auth/permissions";
+import { countersignView } from "@/onboarding/countersign";
+import { fmtDate } from "@/lib/format";
+import { PortalHeader } from "@/app/PortalHeader";
+import { CountersignButton } from "./CountersignButton";
+
+export const dynamic = "force-dynamic";
+
+export default async function ContractPage({ params }: { params: Promise<{ onboardingId: string }> }) {
+  const viewer = await requirePermission("ace.manage");
+  const { onboardingId } = await params;
+  const c = await countersignView(onboardingId);
+  if (!c) notFound();
+  return (
+    <>
+      <PortalHeader role={viewer.role} viewerName={viewer.name} />
+      <main>
+        <p><a href="/onboarding">← Onboarding</a></p>
+        <h2>{c.clientName} · {c.packageName ?? "Agreement"}</h2>
+        <section className="panel pad">
+          <p>
+            Signed by <strong>{c.signerName}</strong> on {fmtDate(c.signedAt)} from IP {c.signerIp}. Contract version {c.contractVersion}.
+            <br /><span className="muted">Fingerprint (SHA-256) of the signed text: <code>{c.signedHash}</code></span>
+          </p>
+          {c.countersignedAt ? (
+            <p className="form-ok">Countersigned by {c.countersignedBy} on {fmtDate(c.countersignedAt)}. The client was emailed the fully signed copy.</p>
+          ) : (
+            <CountersignButton onboardingId={c.id} />
+          )}
+        </section>
+        <section className="panel pad">
+          <pre className="contract">{c.text}</pre>
+        </section>
+      </main>
+    </>
+  );
+}

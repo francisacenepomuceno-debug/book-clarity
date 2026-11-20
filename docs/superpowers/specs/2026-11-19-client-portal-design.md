@@ -297,3 +297,21 @@ These were settled as builder/design calls (marked so the owner can check them):
 - **Q1: ACE months 1–6 commission base.** Calculated from the **regular package list price** (6 × monthly list price), not from the per-slot price ACE paid. A Custom ACE slot uses its Custom price, and a Custom client who continues keeps that price from month 7.
 - **Q2: GHL build.** **The portal builder builds the GHL side:** workflows, pipeline, custom fields and tags. The builder also drafts all email and SMS wording, which Book Clarity approves before go-live. Workflows are triggered by tag and custom-field changes so they work on any GHL plan; an inbound webhook trigger can be used if the plan allows it.
 - **Q3: 100%-off months.** A $0 invoice does **not** count toward a commission window. The window extends so the executive still gets 12 (Direct) or 6 (ACE months 7–12) *paid* months.
+
+## 20. Owner answers (2026-11-20)
+
+- **GHL account:** Book Clarity has its **own GHL account**. The connected "Delegate to Elevate" location must not be used. The portal uses a Private Integration token from Book Clarity's GHL.
+- **Agreements:** signed **inside the portal**, and **each package has its own contract**.
+- **Intake form:** built in the portal (replacing the current external form), with questions editable in Settings.
+- **ACE card payments:** ACE sometimes pays by card. One payment page lets the payer choose bank (ACH, no fee) or card. A credit card adds the 3% automatically; a debit card never does.
+- **ACE slot dashboard:** shows slots bought, used and available per package, and which client holds which slot.
+- **ACE month 6:**
+  - ACE clients are notified **60 days** before the prepaid period ends, then at 30 and 14 days, and can answer Yes or No themselves.
+  - A client's "No" is recorded but ends nothing. Owners try to win the client back, and the client can still say Yes up to the last prepaid day.
+  - Service ends only when an Owner confirms it.
+- **Contracts (2026-11-20):** the four package contracts were provided as PDFs and converted to templates in `portal/contracts/`. Only the blanks are filled in, plus these approved wording changes:
+  - monthly billing starts 14 days after the onboarding fee, then on that date each month (not the 1st);
+  - the onboarding fee is charged at signup and the first month 14 days later;
+  - Auto-Pay mentions ACH (no fee).
+- **Countersigning:** Jose countersigns each contract in the portal. The client isn't held up while it waits.
+- **Auto-suspend:** clients are suspended automatically when unpaid for N days (default 30, a setting). There are no late fees for now. Paying resumes the client automatically.

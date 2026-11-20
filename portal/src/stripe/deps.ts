@@ -56,13 +56,42 @@ export function defaultWebhookDeps(over: Partial<WebhookDeps> = {}): WebhookDeps
       await reconcileCardFee(inv, paid, getStripe());
     },
     getInvoiceIdForCharge: (charge) => getInvoiceIdForCharge(charge),
+    getInvoiceIdForPaymentIntent: async (pi) => {
+      const res = await getStripe().invoicePayments.list({ payment: { type: "payment_intent", payment_intent: pi }, limit: 1 });
+      const inv = res.data[0]?.invoice;
+      return typeof inv === "string" ? inv : inv?.id ?? null;
+    },
     onAceSetupCompleted: async (session) => {
       const { onSetupCompleted } = await import("@/ace/continuation");
       await onSetupCompleted(session);
     },
+    onUpcomingInvoice: async (inv) => {
+      const { onUpcomingInvoice } = await import("@/notify/payments");
+      await onUpcomingInvoice(inv);
+    },
+    onPaymentFailedNotice: async (rowId) => {
+      const { onPaymentFailedNotice } = await import("@/notify/payments");
+      await onPaymentFailedNotice(rowId);
+    },
     onAceCardSetupCompleted: async (session) => {
       const { onAceCardSetupCompleted } = await import("@/ace/cardPay");
       await onAceCardSetupCompleted(session);
+    },
+    onOnboardingSetupSucceeded: async (si) => {
+      const { onOnboardingSetupSucceeded } = await import("@/onboarding/payment");
+      await onOnboardingSetupSucceeded(si);
+    },
+    onOnboardingFeePaid: async (inv) => {
+      const { onOnboardingFeePaid } = await import("@/onboarding/payment");
+      await onOnboardingFeePaid(inv);
+    },
+    onOnboardingFeeFailed: async (inv) => {
+      const { onOnboardingFeeFailed } = await import("@/onboarding/payment");
+      await onOnboardingFeeFailed(inv);
+    },
+    onSubscriptionInvoicePaid: async (clientId) => {
+      const { resumeIfPaidUp } = await import("@/billing/suspension");
+      await resumeIfPaidUp(clientId);
     },
     onAceBatchPaid: async (inv) => {
       const { onBatchInvoicePaid } = await import("@/ace/batches");

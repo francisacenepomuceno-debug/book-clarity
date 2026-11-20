@@ -33,6 +33,10 @@ In **Settings → Environment Variables**, add the following:
 | `AUTH_SECRET` | A random value of 64 or more characters. Use your password manager's generator. It signs sign-in sessions; changing it signs everyone out. |
 | `SETUP_TOKEN` | A setup code you make up, of 20 or more characters. It's used once in step 6. |
 | `BUSINESS_TZ` | `America/New_York`, or your time zone. |
+| `PORTAL_BASE_URL` | Your site's address, e.g. `https://<your-project>.vercel.app`, with no slash at the end. **Required:** every link in client emails and texts is built from it. Until it's set, no messages are sent. Update it if you add your own domain (step 8). |
+| `CRON_SECRET` | A random value of 32 or more characters. Vercel uses it to run the daily reminder job; without it, no date-based reminders go out. |
+| `GHL_API_TOKEN` | Book Clarity's GHL Private Integration token (step 6b). Leave it empty until you're ready; messages are just logged as skipped. |
+| `GHL_LOCATION_ID` | Book Clarity's GHL sub-account (location) ID (step 6b). |
 | `STRIPE_WEBHOOK_SECRET` | Leave this for step 7. |
 
 ## 5. Deploy
@@ -54,6 +58,17 @@ Go to **Deployments → Redeploy**, or push to the production branch. When it fi
 
    Each person's details are shown once. Send them privately.
 
+## 6b. Connect Book Clarity's GHL (for reminders and notices)
+
+Use **Book Clarity's own GHL account** (not any other business's sub-account).
+
+1. In GHL, open the Book Clarity sub-account → **Settings → Private Integrations → Create new integration**.
+2. Give it the scopes **contacts.write**, **contacts.readonly**, **conversations/message.write** and **conversations.readonly**.
+3. Copy the token into Vercel as `GHL_API_TOKEN`, and the sub-account's **Location ID** (Settings → Business Profile) as `GHL_LOCATION_ID`. Redeploy.
+4. Make sure the sub-account can send email (a sending domain) and SMS (a phone number) in GHL.
+
+Messages appear in each contact's GHL **Conversations**. The schedule lives in the portal: 3 days before a charge; on a decline and days 3, 7 and 14; an Owner alert at day 21; ACE clients 60, 30 and 14 days before their prepaid period ends; ACE batch reminders at 7 and 14 days.
+
 ## 7. Connect Stripe's live updates
 
 1. In Stripe, go to **Developers → Webhooks → Add endpoint**.
@@ -62,8 +77,17 @@ Go to **Deployments → Redeploy**, or push to the production branch. When it fi
    - `invoice.created`, `invoice.finalized`, `invoice.updated`, `invoice.paid`, `invoice.payment_failed`, `invoice.voided`, `invoice.marked_uncollectible`
    - `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`
    - `customer.updated`
+   - `invoice.upcoming`, `charge.refunded`, `checkout.session.completed`
+   - `payment_intent.processing` (bank payments clearing) and `setup_intent.succeeded` (a new client saved their bank account or card during onboarding)
 4. Copy the endpoint's **Signing secret** (it starts `whsec_`) into Vercel as `STRIPE_WEBHOOK_SECRET`, then **Redeploy**.
 5. In Stripe, the endpoint's next deliveries should show **200 OK**.
+
+## 7b. Stop Stripe's own reminder emails
+
+The portal sends reminders through GHL, so turn off Stripe's duplicates the same day GHL is connected: in Stripe, **Settings → Billing → Subscriptions and emails**, turn off the emails for **failed payments** and **upcoming renewals**. Keep **Smart Retries** on. Also:
+- Turn off Stripe's reminder emails for **invoices sent to customers** (the ACE batch invoices). The portal sends those reminders to ACE through GHL.
+- Set the **upcoming renewal events** lead time to **3 days** (Settings → Billing → Subscriptions and emails). The portal's "payment coming up" notice uses it.
+- In the **Customer portal** settings, allow updating payment methods with **card and US bank account (ACH)**. Turn **off** cancelling subscriptions and changing plans. The "update payment method" link in reminders opens only the payment-method page, but this keeps anything else off. Also enable the **Customer portal** (Settings → Billing → Customer portal) with "update payment methods" allowed; the "update payment method" links use it.
 
 ## 8. Optional: your own address
 

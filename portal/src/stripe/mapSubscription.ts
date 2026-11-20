@@ -8,6 +8,7 @@ export type LiveClientRow = {
   subscriptionId: string;
   name: string;
   email: string | null;
+  phone?: string | null;
   status: ClientStatus;
   packageName: string;
   sixMonthContract: boolean;
@@ -82,11 +83,13 @@ export function mapSubscription(
 
   const ended = sub.status === "canceled" || sub.status === "incomplete_expired";
   const paused = sub.status === "paused";
+  const suspended = sub.metadata?.bc_suspended === "1";
 
   const status = deriveClientStatus({
     type: "DIRECT", // Direct vs ACE comes from the commission spreadsheet import (Plan 6)
     endedAt: ended ? fromTs(sub.ended_at) ?? now : null,
     paused,
+    suspended,
     onboardingComplete: true,
     acePrepaidUntil: null,
     continuingAwaitingPm: false,
@@ -104,6 +107,7 @@ export function mapSubscription(
     subscriptionId: sub.id,
     name: customer?.name || customer?.email || "(no name)",
     email: customer?.email ?? null,
+    phone: customer?.phone ?? null,
     status,
     packageName: [...new Set(packages)].join(" + ") || "—",
     sixMonthContract: sixMonth,

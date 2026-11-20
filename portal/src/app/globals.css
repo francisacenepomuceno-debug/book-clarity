@@ -33,7 +33,7 @@ tr:last-child td { border-bottom: 0; }
 .s-CURRENT { color: var(--ok); }
 .s-UNPAID { color: var(--info); }
 .s-PAST_DUE { color: var(--warn); }
-.s-AT_RISK { color: var(--bad); }
+.s-AT_RISK, .s-SUSPENDED { color: var(--bad); font-weight: 600; }
 .s-PAUSED, .s-ENDED { color: var(--muted); }
 .muted { color: var(--muted); }
 .note { margin-top: 14px; color: var(--muted); font-size: 12px; }
@@ -75,6 +75,15 @@ ul.plain { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px;
 button.secondary { background: #fff !important; color: var(--brand) !important; border: 1px solid var(--brand) !important; }
 .copybox { flex-basis: 100%; font-size: 12px; }
 .copybox input { width: 100%; font: inherit; padding: 6px; border: 1px solid var(--line); border-radius: 6px; margin-top: 4px; }
-.paybtn { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; text-decoration: none; color: var(--text); background: #fff; }
+.paybtn { width: 100%; text-align: left; font: inherit; cursor: pointer; display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; text-decoration: none; color: var(--text); background: #fff; }
 .paybtn:hover { border-color: var(--brand); }
 .paybtn span { color: var(--muted); font-size: 13px; }
+.card button.paybtn { background: #fff; color: var(--text); border: 1px solid var(--line); padding: 14px 16px; border-radius: 8px; }
+.card button.paybtn:hover { border-color: var(--brand); }
+.card form + form { margin-top: 10px; }
+.card.wide:has(pre.contract) { max-width: 760px; }
+pre.contract { white-space: pre-wrap; font: 13px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; background: #fafbfc; border: 1px solid var(--line); border-radius: 8px; padding: 14px; max-height: 60vh; overflow: auto; }
+.card fieldset { border: 1px solid var(--line); border-radius: 8px; display: grid; gap: 6px; }
+.card textarea, .card select { font: inherit; padding: 6px; border: 1px solid var(--line); border-radius: 6px; }
+@media (max-width: 600px) { pre.contract { max-height: none; } }
+.answers { display: grid; gap: 8px; margin: 10px 0 0; } .answers dt { font-weight: 600; font-size: 13px; } .answers dd { margin: 2px 0 0; white-space: pre-wrap; }

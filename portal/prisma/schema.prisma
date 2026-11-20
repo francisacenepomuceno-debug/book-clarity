@@ -28,6 +28,7 @@ enum ClientStatus {
   PAST_DUE
   AT_RISK
   PAUSED
+  SUSPENDED
   CONTINUING_AWAITING_PM
   ENDED
 }
@@ -64,6 +65,8 @@ model Package {
   onboardingFeeCents Int
   isCustom           Boolean  @default(false)
   active             Boolean  @default(true)
+  contractTemplate   String?
+  contractVersion    String?
   clients            Client[]
 }
 
@@ -71,6 +74,7 @@ model Client {
   id                    String       @id @default(cuid())
   name                  String
   email                 String?
+  phone                 String?
   billingState          String?
   type                  ClientType   @default(DIRECT)
   status                ClientStatus @default(ONBOARDING)
@@ -85,7 +89,13 @@ model Client {
   acePrepaidUntil       DateTime?
   aceSlotId             String?
   continuationDecision  String?
+  clientAnswer          String?
+  continuationBy        String?
+  clientAnsweredAt      DateTime?
   aceSetupSessionId     String?
+  suspendedAt           DateTime?
+  suspensionWaivedAt    DateTime?
+  onboarding            Onboarding?
   createdAt             DateTime     @default(now())
   endedAt               DateTime?
   invoices              Invoice[]
@@ -104,6 +114,7 @@ model Invoice {
   onboardingCents   Int         @default(0)
   refundedCents     Int         @default(0)
   refundedPackageCents Int      @default(0)
+  processingSince   DateTime?
   taxCents          Int         @default(0)
   seenRefundIds     String[]    @default([])
   totalCents        Int
@@ -261,4 +272,55 @@ model AceSlot {
   customMonthlyCents Int?
 
   @@index([batchId, packageId])
+}
+
+/// One row per notice key: sends each notice at most once (retrying a failure once).
+model Notification {
+  id        String    @id @default(cuid())
+  key       String    @unique
+  kind      String
+  clientId  String?
+  to        String?
+  channels  String    @default("")
+  status    String
+  error     String?
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+  sentAt    DateTime?
+
+  @@index([clientId])
+}
+
+/** A client's self-serve onboarding progress (Plan 4B). */
+model Onboarding {
+  id                 String    @id @default(cuid())
+  clientId           String    @unique
+  client             Client    @relation(fields: [clientId], references: [id])
+  packageId          String?
+  monthlyCents       Int?
+  onboardingFeeCents Int?
+  details            Json?
+  signedAt           DateTime?
+  signerName         String?
+  signerIp           String?
+  signedText         String?
+  signedHash         String?
+  contractVersion    String?
+  quickbooks         String?
+  countersignedAt    DateTime?
+  countersignedById  String?
+  feeInvoiceId       String?
+  feeSetupSessionId  String?
+  feePaidAt          DateTime?
+  feeSubmittedAt     DateTime?
+  feePaymentMethodId String?
+  stripeSubscriptionId String?
+  intake             Json?
+  intakeAt           DateTime?
+  callBookedAt       DateTime?
+  completedAt        DateTime?
+  lastProgressAt     DateTime  @default(now())
+  createdById        String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 }

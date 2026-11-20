@@ -53,6 +53,8 @@ export async function upsertInvoiceFromStripe(
 
   const existing = await db.invoice.findUnique({ where: { stripeInvoiceId: inv.id! } });
   const firstFailedAt = extra.failedNow && !existing?.firstFailedAt ? new Date() : undefined;
+  // A failure or a payment ends any "bank payment processing" hold.
+  const clearProcessing = extra.failedNow || data.status === "paid" ? { processingSince: null } : {};
   if (existing && rank(existing.status) > rank(data.status)) {
     // Stale event (e.g. invoice.created delivered after invoice.paid): keep the newer state.
     return firstFailedAt ? db.invoice.update({ where: { id: existing.id }, data: { firstFailedAt } }) : existing;
@@ -61,6 +63,6 @@ export async function upsertInvoiceFromStripe(
   return db.invoice.upsert({
     where: { stripeInvoiceId: inv.id! },
     create: { stripeInvoiceId: inv.id!, ...data, firstFailedAt: firstFailedAt ?? null },
-    update: { ...data, ...(firstFailedAt ? { firstFailedAt } : {}) },
+    update: { ...data, ...clearProcessing, ...(firstFailedAt ? { firstFailedAt } : {}) },
   });
 }

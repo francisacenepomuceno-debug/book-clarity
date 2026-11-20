@@ -16,9 +16,9 @@ describe("prepaidUntil", () => {
 });
 
 describe("continuationDueAt", () => {
-  it("is 30 days before the end", () => {
+  it("is 60 days before the end (owner, 2026-11-20)", () => {
     const end = prepaidUntil("2026-01-15", NY);
-    expect(end.getTime() - continuationDueAt(end).getTime()).toBe(30 * 24 * 3600_000);
+    expect(end.getTime() - continuationDueAt(end).getTime()).toBe(60 * 24 * 3600_000);
   });
 });
 
