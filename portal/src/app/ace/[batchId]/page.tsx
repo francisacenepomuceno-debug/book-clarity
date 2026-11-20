@@ -49,8 +49,8 @@ export default async function BatchPage({ params }: { params: Promise<{ batchId:
         )}
         {!batch.paidAt && batch.stripeInvoiceId && (
           <section className="panel pad">
-            <h3>ACE paying by card?</h3>
-            <p className="muted">ACE's invoice accepts ACH and bank transfer. To pay by card instead, send ACE this link. Their invoice is reissued for the card (with the 3% fee for credit cards when the card fee is on) and the ACH invoice is cancelled.</p>
+            <h3>Payment link for ACE</h3>
+            <p className="muted">ACE chooses bank (ACH, no fee) or card. Paying by credit card adds the 3% fee automatically (when the card fee is on); debit cards have no fee. Choosing card reissues the invoice and cancels the ACH one, so ACE can't pay twice.</p>
             <CardPayLinkForm batchId={batchId} />
           </section>
         )}

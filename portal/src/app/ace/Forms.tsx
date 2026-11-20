@@ -185,10 +185,10 @@ export function CardPayLinkForm({ batchId }: { batchId: string }) {
   return (
     <form action={action} className="row-form">
       <input type="hidden" name="batchId" value={batchId} />
-      <button className="secondary" disabled={pending}>Get card payment link</button>
+      <button className="secondary" disabled={pending}>Get payment link</button>
       {s.setupUrl && (
         <div className="copybox">
-          Send this to ACE to pay by card (credit cards add the 3% fee; debit cards don't): <input readOnly value={s.setupUrl} onFocus={(ev) => ev.currentTarget.select()} />
+          Send this to ACE. They choose bank (ACH, no fee) or card (credit cards add 3%): <input readOnly value={s.setupUrl} onFocus={(ev) => ev.currentTarget.select()} />
         </div>
       )}
       {s.error && <span className="form-error">{s.error}</span>}

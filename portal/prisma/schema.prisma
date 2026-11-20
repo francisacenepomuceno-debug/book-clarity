@@ -232,6 +232,7 @@ model AceBatch {
   totalCents       Int
   stripeInvoiceId  String?     @unique
   invoiceSentAt    DateTime?
+  invoiceVersion   Int         @default(0)
   paidAt           DateTime?
   paidVia          AcePayment?
   paymentMethod    String?

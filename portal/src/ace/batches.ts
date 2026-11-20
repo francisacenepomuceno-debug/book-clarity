@@ -109,6 +109,8 @@ async function issue(batchId: string): Promise<ActionResult> {
   const lines = await db.aceBatchLine.findMany({ where: { batchId }, orderBy: { id: "asc" } });
   const name = new Map((await db.package.findMany()).map((p) => [p.id, p.name]));
   const stripe = getStripe();
+  // Each reissue (e.g. back to ACH after a card attempt) gets its own idempotency keys.
+  const v = batch.invoiceVersion > 0 ? `-v${batch.invoiceVersion}` : "";
   try {
     let invoiceId = batch.stripeInvoiceId;
     if (!invoiceId) {
@@ -124,7 +126,7 @@ async function issue(batchId: string): Promise<ActionResult> {
             payment_method_options: { customer_balance: { funding_type: "bank_transfer", bank_transfer: { type: "us_bank_transfer" } } },
           },
         },
-        { idempotencyKey: `bc-ace-batch-${batchId}` },
+        { idempotencyKey: `bc-ace-batch-${batchId}${v}` },
       );
       invoiceId = inv.id!;
       await db.aceBatch.update({ where: { id: batchId }, data: { stripeInvoiceId: invoiceId } });
@@ -141,7 +143,7 @@ async function issue(batchId: string): Promise<ActionResult> {
             description: `${l.quantity} × ${name.get(l.packageId)} — 6 months + onboarding (ACE)`,
             metadata: { kind: "ACE_BATCH", batchId },
           },
-          { idempotencyKey: `bc-ace-batch-${batchId}-line-${n}` },
+          { idempotencyKey: `bc-ace-batch-${batchId}${v}-line-${n}` },
         );
       }
       await stripe.invoices.finalizeInvoice(invoiceId);
@@ -155,6 +157,15 @@ async function issue(batchId: string): Promise<ActionResult> {
     console.error(`[ace] batch ${batchId}: Stripe invoice failed:`, (e as Error).message);
     return { ok: false, error: "The batch was saved, but sending ACE's invoice failed. Open the batch and use \"Send invoice again\"." };
   }
+}
+
+/** Issues a fresh ACH / bank-transfer invoice for a batch (after the previous one was voided). */
+export async function reissueAchInvoice(batchId: string): Promise<ActionResult> {
+  await db.aceBatch.update({
+    where: { id: batchId },
+    data: { stripeInvoiceId: null, invoiceSentAt: null, invoiceVersion: { increment: 1 } },
+  });
+  return issue(batchId);
 }
 
 /** Retry for a batch whose invoice wasn't fully created or sent. */

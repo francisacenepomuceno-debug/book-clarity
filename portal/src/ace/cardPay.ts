@@ -7,7 +7,7 @@ import { getFeeSettings } from "@/settings/cardFee";
 import { CARD_FEE_METADATA_KEY } from "@/stripe/lines";
 import { signLink, verifyLink } from "@/lib/links";
 import { writeAudit } from "@/audit/log";
-import { getAceCustomerId } from "@/ace/batches";
+import { getAceCustomerId, reissueAchInvoice } from "@/ace/batches";
 import type { ActionResult } from "@/billing/discounts";
 
 const PURPOSE = "ace-card-pay";
@@ -25,6 +25,35 @@ export async function aceCardPayLink(batchId: string, baseUrl: string): Promise<
   if (batch.paidAt) return { ok: false, error: "This batch is already paid." };
   if (!(await getAceCustomerId())) return { ok: false, error: "Set ACE's Stripe customer in Settings first." };
   return { ok: true, url: `${baseUrl}/pay/ace/${signLink(PURPOSE, batchId)}` };
+}
+
+/** Public: what ACE sees on the payment page — the total, and the 3% fee they'd add by paying with a credit card. */
+export async function acePayOptions(token: string): Promise<{ batchId: string; totalCents: number; creditCardFeeCents: number } | { error: string }> {
+  const batchId = verifyLink(PURPOSE, token);
+  const batch = batchId ? await db.aceBatch.findUnique({ where: { id: batchId } }) : null;
+  if (!batch) return { error: "This link isn't valid. Please use the link Book Clarity sent you." };
+  if (batch.paidAt) return { error: "This batch is already paid. Thank you!" };
+  const fee = decideCardFee({ baseCents: batch.totalCents, paymentMethodType: "card", cardFunding: "credit", billingState: null, settings: await getFeeSettings() });
+  return { batchId: batch.id, totalCents: batch.totalCents, creditCardFeeCents: fee.feeCents };
+}
+
+/** Public: ACE chose bank transfer / ACH. Sends them to the Stripe invoice page, reissuing an ACH invoice if needed. */
+export async function startAceBankPayment(token: string): Promise<{ url: string } | { error: string }> {
+  const opts = await acePayOptions(token);
+  if ("error" in opts) return opts;
+  const stripe = getStripe();
+  const batch = await db.aceBatch.findUniqueOrThrow({ where: { id: opts.batchId } });
+  if (batch.stripeInvoiceId) {
+    const inv = await stripe.invoices.retrieve(batch.stripeInvoiceId);
+    if (inv.status === "open" && inv.metadata?.payBy !== "card" && inv.hosted_invoice_url) return { url: inv.hosted_invoice_url };
+    if (inv.status === "paid") return { error: "This batch is already paid. Thank you!" };
+    if (inv.status === "open") await stripe.invoices.voidInvoice(inv.id!); // an unpaid card invoice
+  }
+  const r = await reissueAchInvoice(batch.id);
+  if (!r.ok) return { error: "Bank payment isn't available right now. Please contact Book Clarity." };
+  const fresh = await db.aceBatch.findUniqueOrThrow({ where: { id: batch.id } });
+  const inv = await stripe.invoices.retrieve(fresh.stripeInvoiceId!);
+  return inv.hosted_invoice_url ? { url: inv.hosted_invoice_url } : { error: "Bank payment isn't available right now. Please contact Book Clarity." };
 }
 
 /** Public: ACE opened the card link. Opens a fresh Stripe page to enter the card (nothing is charged yet). */
