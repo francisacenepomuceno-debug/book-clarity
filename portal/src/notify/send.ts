@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { ghlConfigured, ghlSendMessage, ghlUpsertContact } from "@/ghl/client";
 import { looksLikeName } from "@/notify/templates";
+import { noticesOn } from "@/settings/launch";
 
 export const MAX_ATTEMPTS = 2;
 
@@ -57,6 +58,10 @@ async function sendNoticeInner(n: Notice): Promise<SendResult> {
       },
     });
 
+  if (!(await noticesOn())) {
+    await finish("SKIPPED", { error: "Notices aren't turned on yet (Super Admin: Launch page)" });
+    return "SKIPPED";
+  }
   if (process.env.NODE_ENV === "production" && !process.env.PORTAL_BASE_URL) {
     await finish("SKIPPED", { error: "PORTAL_BASE_URL not set (links would be wrong)" });
     return "SKIPPED";
