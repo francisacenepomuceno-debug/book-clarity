@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { requirePermission } from "@/auth/permissions";
-import { validateSplit } from "@/domain/commission";
+import { monthOf, packagePaidCents, startOfDayIn, validateSplit, windowMonthsFor } from "@/domain/commission";
 import { setClientCommission } from "@/commissions/splits";
 import { assignSlot } from "@/ace/slots";
 import { writeAudit } from "@/audit/log";
@@ -79,23 +79,45 @@ export type ReadyRow = {
   newExecutives: string[];
   monthsBeforePortal: number | undefined;
   effectiveFrom: Date;
-  ace: { batchId: string; packageId: string; startOn: string } | null;
+  ace: { batchId: string; packageId: string; startOn: string; historical: boolean } | null;
+  /** Months whose commission Apply will post now (payments already in the portal that would earn). */
+  willPost: string[];
+  /** True when this row puts the client in a non-historical ACE batch, which posts the months 1–6 lump sum. */
+  aceLumpSum: boolean;
+  /** Payments before this moment count as settled outside the portal and never earn. */
+  settledThrough: Date | null;
 };
 export type Problem = { line: number; client: string; error: string };
 
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const TZ = process.env.BUSINESS_TZ ?? "America/New_York";
+/** A real calendar date written YYYY-MM-DD (rejects 2025-13-01 and 2025-02-30). */
+const isRealDate = (s: string) => {
+  if (!DATE.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+};
 
 /** Owners: checks every row and matches it to a client. Nothing is changed. */
-export async function planImport(text: string, opts: { createMissingExecutives: boolean }): Promise<{ ready: ReadyRow[]; problems: Problem[] }> {
+export async function planImport(
+  text: string,
+  opts: { createMissingExecutives: boolean; settledThrough?: string },
+): Promise<{ ready: ReadyRow[]; problems: Problem[]; error?: string }> {
   await requirePermission("ace.manage");
+  if (opts.settledThrough && !isRealDate(opts.settledThrough)) return { ready: [], problems: [], error: "The 'settled through' date must be a real date (YYYY-MM-DD)." };
+  const settledThrough = opts.settledThrough ? startOfDayIn(opts.settledThrough, TZ) : null;
   const rows = parseCsv(text);
-  const [clients, execs, batches, freeSlots] = await Promise.all([
+  const [clients, execs, batches, freeSlots, paidInvoices, earnedInvoices] = await Promise.all([
     db.client.findMany({ include: { package: true } }),
-    db.executive.findMany({ where: { active: true } }),
+    db.executive.findMany(),
     db.aceBatch.findMany(),
     db.aceSlot.findMany({ where: { clientId: null }, select: { batchId: true, packageId: true } }),
+    db.invoice.findMany({ where: { kind: "SUBSCRIPTION", status: "paid", paidAt: { not: null }, backfilled: false }, orderBy: { paidAt: "asc" } }),
+    db.commissionEntry.findMany({ where: { kind: "EARNED" }, distinct: ["invoiceId"], select: { invoiceId: true, clientId: true } }),
   ]);
+  const earned = new Set(earnedInvoices.map((e) => e.invoiceId));
+  const seenClients = new Map<string, number>();
   const execByName = new Map(execs.map((e) => [norm(e.name), e]));
   const free = new Map<string, number>();
   for (const s of freeSlots) free.set(`${s.batchId}:${s.packageId}`, (free.get(`${s.batchId}:${s.packageId}`) ?? 0) + 1);
@@ -128,6 +150,8 @@ export async function planImport(text: string, opts: { createMissingExecutives: 
       const rate = percent(r[`rate_${n}`]);
       if (!name && rate === null) continue;
       if (!name || rate === null || Number.isNaN(rate)) return fail(`Executive ${n} needs both a name and a rate.`);
+      if (execByName.get(norm(name))?.active === false) return fail(`"${name}" is an inactive executive. Reactivate them on the Commissions page first.`);
+      if (Math.abs(rate * 100 - Math.round(rate * 100)) > 1e-9) return fail(`Use at most two decimal places for rates (got ${rate}%).`);
       if (!execByName.has(norm(name))) {
         if (!opts.createMissingExecutives) return fail(`"${name}" isn't an executive in the portal. Add them on the Commissions page, or tick "create missing executives".`);
         newExecutives.push(name.trim().replace(/\s+/g, " "));
@@ -143,40 +167,61 @@ export async function planImport(text: string, opts: { createMissingExecutives: 
     let monthsBeforePortal: number | undefined;
     if (r.months_already_earned !== undefined) {
       const m = Number(r.months_already_earned);
+      const isAce = type === "ACE" || (type === null && client.type === "ACE");
+      if (isAce && (!Number.isInteger(m) || m < 0 || m > 6)) return fail("For ACE clients, months already earned are the paid months after the six prepaid by ACE: a whole number from 0 to 6.");
       if (!Number.isInteger(m) || m < 0 || m > 12) return fail("Months already earned must be a whole number from 0 to 12.");
       monthsBeforePortal = m;
     }
     if (shares.length === 0 && monthsBeforePortal !== undefined) return fail("Months already earned needs at least one executive and rate.");
 
     const effectiveOn = r.effective_from ?? "2000-01-01";
-    if (!DATE.test(effectiveOn)) return fail("effective_from must be a date like 2025-01-31.");
+    if (!isRealDate(effectiveOn)) return fail("effective_from must be a real date like 2025-01-31.");
 
     let ace: ReadyRow["ace"] = null;
     if (r.ace_batch || r.ace_start_date) {
       if (type !== "ACE" && !(type === null && client.type === "ACE")) return fail("ACE batch and start date are only for ACE clients.");
-      if (!r.ace_batch || !r.ace_start_date || !DATE.test(r.ace_start_date)) return fail("ACE clients need both ace_batch and ace_start_date (YYYY-MM-DD).");
+      if (!r.ace_batch || !r.ace_start_date || !isRealDate(r.ace_start_date)) return fail("ACE clients need both ace_batch and a real ace_start_date (YYYY-MM-DD).");
       if (client.aceSlotId) {
         ace = null; // already in a slot: leave it (re-running the import changes nothing)
       } else {
         const batch = batches.find((b) => norm(b.note ?? "") === norm(r.ace_batch!)) ?? batches.find((b) => b.purchasedAt.toISOString().slice(0, 10) === r.ace_batch);
         if (!batch) return fail(`No ACE batch is named "${r.ace_batch}". Use the batch's note or its purchase date.`);
         if (!client.packageId) return fail("Link this client to a package first, so the right ACE slot can be used.");
+        if (!batch.historical && client.stripeSubscriptionId) {
+          return fail("This client is on Stripe autopay, so ACE's prepaid months would be charged twice. Put them in a batch marked Historical, or end their Stripe subscription first.");
+        }
         const k = `${batch.id}:${client.packageId}`;
         if (!free.get(k)) return fail(`No free ${client.package?.name ?? "package"} slot left in batch "${r.ace_batch}".`);
         free.set(k, free.get(k)! - 1);
-        ace = { batchId: batch.id, packageId: client.packageId, startOn: r.ace_start_date };
+        ace = { batchId: batch.id, packageId: client.packageId, startOn: r.ace_start_date, historical: batch.historical };
       }
     }
 
+    // What Apply will post now: payments already in the portal that fall inside the commission window.
+    let willPost: string[] = [];
+    if (shares.length) {
+      const window = windowMonthsFor({ type: type ?? client.type });
+      const mine = paidInvoices.filter((p) => p.clientId === client.id && packagePaidCents(p) > 0);
+      const counted = mine.filter((p) => !settledThrough || p.paidAt! >= settledThrough);
+      const already = counted.filter((p) => earned.has(p.id)).length;
+      const room = Math.max(0, window - (monthsBeforePortal ?? client.commissionMonthsBeforePortal) - already);
+      willPost = counted.filter((p) => !earned.has(p.id)).slice(0, room).map((p) => monthOf(p.paidAt!, TZ));
+    }
+    if (seenClients.has(client.id)) return fail(`This client appears more than once in the file (also line ${seenClients.get(client.id)}). Keep one row per client.`);
+    seenClients.set(client.id, line);
+
     ready.push({
       line,
+      willPost,
+      aceLumpSum: !!ace && !ace.historical,
+      settledThrough,
       clientId: client.id,
       clientName: client.name,
       type,
       shares,
       newExecutives,
       monthsBeforePortal,
-      effectiveFrom: new Date(`${effectiveOn}T00:00:00Z`),
+      effectiveFrom: startOfDayIn(effectiveOn, TZ),
       ace,
     });
   });
@@ -196,7 +241,13 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
         await writeAudit({ actorId: actor.id, action: "executive_added", entity: "Executive", entityId: e.id, after: { name, via: "import" } });
       }
     }
+    const previousType = (await db.client.findUniqueOrThrow({ where: { id: r.clientId }, select: { type: true } })).type;
+    // Type first: the commission window (12 Direct, 6 ACE) depends on it. Restored if the split is refused.
     if (r.type) await db.client.update({ where: { id: r.clientId }, data: { type: r.type } });
+    // Payments before the 'settled through' date were paid out by hand: treat them as history (never earn).
+    if (r.settledThrough) {
+      await db.invoice.updateMany({ where: { clientId: r.clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { lt: r.settledThrough } }, data: { backfilled: true } });
+    }
     if (r.shares.length) {
       const execs = await db.executive.findMany({ where: { active: true } });
       const id = (n: string) => execs.find((e) => norm(e.name) === norm(n))?.id;
@@ -205,10 +256,15 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
         effectiveFrom: r.effectiveFrom,
         monthsBeforePortal: r.monthsBeforePortal,
       });
-      if (!res.ok) { fail(res.error); continue; }
+      if (!res.ok) {
+        if (r.type) await db.client.update({ where: { id: r.clientId }, data: { type: previousType } });
+        fail(res.error);
+        continue;
+      }
     }
     if (r.ace) {
-      const res = await assignSlot({ batchId: r.ace.batchId, packageId: r.ace.packageId, clientId: r.clientId, startOn: r.ace.startOn, confirmSubscribed: true });
+      // Only a historical batch may hold a client who is on Stripe autopay (checked again by assignSlot).
+      const res = await assignSlot({ batchId: r.ace.batchId, packageId: r.ace.packageId, clientId: r.clientId, startOn: r.ace.startOn, confirmSubscribed: r.ace.historical });
       if (!res.ok) { fail(`Commission saved, but the ACE slot wasn't assigned: ${res.error}`); continue; }
     }
     applied++;

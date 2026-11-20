@@ -107,13 +107,19 @@ It is designed to be safe on live data:
 
 ## 7d. Go-live: move existing clients in, then switch on
 
-Do these in order. Nothing here changes anything in Stripe. Client notices and the 3% card fee stay **off** until step 9.
+Do these in order. Nothing here changes anything in Stripe. Client notices, automatic suspension of unpaid clients and the 3% card fee stay **off** until step 9.
+
+**Already running the portal with notices going out?** This update keeps them on: if any notice was sent before, notices are recorded as on. A new portal starts with them off.
 
 1. **Sync clients:** open the dashboard once. Every Stripe subscription becomes a portal client, and each is linked to its package when the package name or Stripe price matches.
 2. **Load history:** run the backfill (section 7c).
 3. **Packages:** on the Packages page, set each package's Stripe price and check its contract. The page lists any client that isn't linked to a package yet.
 4. **Past ACE batches:** on the ACE page, add each past batch with **Already paid** and **Historical** ticked. Historical batches never post the months 1–6 commission again, because it was already settled.
-5. **Commission spreadsheet:** go to Commissions → **Import the commission spreadsheet**, download the template, fill it in and upload it. Check the preview, then press **Apply**. Rows that don't match are listed for you to fix; importing again is safe.
+5. **Commission spreadsheet:** go to Commissions → **Import the commission spreadsheet** and download the template.
+   - Fill it in, and set **"Commission settled outside the portal up to"** to the day after the last commission you paid by hand.
+   - Payments before that date never earn in the portal, so they're never paid twice.
+   - Upload the file and check the preview's **"Commission Apply will post now"** column, then press **Apply**.
+   - Rows that don't match are listed for you to fix; importing again is safe.
 6. **Fix what's left:** fix the import's unmatched rows and the Commissions → "Clients without an owner" list.
 7. **Checklist:** the Super Admin opens **Launch** (top bar). Work through the automatic checks and tick each manual item when it's done:
    - surcharge registration;
