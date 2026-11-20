@@ -28,7 +28,7 @@ export default async function ClientPage({ params }: { params: Promise<{ subscri
 
   return (
     <>
-      <PortalHeader viewerName={viewer.name} />
+      <PortalHeader showUsersLink={can(viewer.role, "users.manage")} viewerName={viewer.name} />
       <main>
         <p><a href="/">← All clients</a></p>
         <h2 style={{ marginBottom: 4 }}>{r.name}</h2>

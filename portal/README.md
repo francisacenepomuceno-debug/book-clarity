@@ -3,6 +3,10 @@
 This is the first slice: a **read-only live client dashboard** built from Stripe. The full build is described in
 `docs/superpowers/plans/`.
 
+## Deploy
+
+See `docs/deploy-vercel.md` for the step-by-step Vercel setup.
+
 ## Run locally
 
 1. Copy `.env.example` to `.env.local` and fill it in:
