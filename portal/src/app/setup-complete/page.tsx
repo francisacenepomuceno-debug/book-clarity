@@ -1,5 +1,12 @@
-export default async function SetupComplete({ searchParams }: { searchParams: Promise<{ cancelled?: string; ace?: string }> }) {
-  const { cancelled, ace } = await searchParams;
+export default async function SetupComplete({ searchParams }: { searchParams: Promise<{ cancelled?: string; ace?: string; updated?: string }> }) {
+  const { cancelled, ace, updated } = await searchParams;
+  if (updated) {
+    return (
+      <main className="auth">
+        <div className="card"><h1>Thank you</h1><p>Your payment details are up to date. Any outstanding payment will be retried automatically.</p></div>
+      </main>
+    );
+  }
   if (ace) {
     return (
       <main className="auth">
