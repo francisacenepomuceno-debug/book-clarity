@@ -1,5 +1,23 @@
-export default async function SetupComplete({ searchParams }: { searchParams: Promise<{ cancelled?: string; ace?: string; updated?: string }> }) {
-  const { cancelled, ace, updated } = await searchParams;
+export default async function SetupComplete({ searchParams }: { searchParams: Promise<{ cancelled?: string; ace?: string; updated?: string; onboarded?: string; onboarding?: string }> }) {
+  const { cancelled, ace, updated, onboarded, onboarding } = await searchParams;
+  if (onboarded) {
+    return (
+      <main className="auth">
+        <div className="card"><h1>You're all set</h1><p>Thank you for completing your onboarding. We look forward to meeting you on your onboarding call. Your monthly billing starts 14 days after your onboarding fee was paid.</p></div>
+      </main>
+    );
+  }
+  if (onboarding) {
+    return (
+      <main className="auth">
+        <div className="card">
+          <h1>{cancelled ? "Payment not finished" : "Thank you"}</h1>
+          <p>{cancelled ? "Nothing was charged. Use your onboarding link to continue whenever you're ready." : "Your onboarding fee is being processed. Return to your onboarding link to continue with the next step."}</p>
+          <p><a href={`/onboard/${onboarding}`}>Continue onboarding</a></p>
+        </div>
+      </main>
+    );
+  }
   if (updated) {
     return (
       <main className="auth">

@@ -167,4 +167,15 @@ export const templates = {
       sms: sms(`Welcome to Book Clarity! Start your onboarding here: ${i.url}`),
     };
   },
+
+  countersignRequest(i: { name: string; clientName: string; packageName: string; url: string }): Message {
+    return {
+      subject: `Countersign: ${i.clientName} signed the ${i.packageName} agreement`,
+      html: html(
+        [`Hi ${esc(firstName(i.name))},`, `<strong>${esc(i.clientName)}</strong> just signed their ${esc(i.packageName)} agreement. Please review and countersign it.`],
+        { label: "Review and countersign", url: i.url },
+      ),
+      sms: sms(`${i.clientName} signed their agreement. Countersign: ${i.url}`),
+    };
+  },
 };

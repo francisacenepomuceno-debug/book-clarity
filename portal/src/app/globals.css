@@ -81,3 +81,8 @@ button.secondary { background: #fff !important; color: var(--brand) !important; 
 .card button.paybtn { background: #fff; color: var(--text); border: 1px solid var(--line); padding: 14px 16px; border-radius: 8px; }
 .card button.paybtn:hover { border-color: var(--brand); }
 .card form + form { margin-top: 10px; }
+.card.wide:has(pre.contract) { max-width: 760px; }
+pre.contract { white-space: pre-wrap; font: 13px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; background: #fafbfc; border: 1px solid var(--line); border-radius: 8px; padding: 14px; max-height: 60vh; overflow: auto; }
+.card fieldset { border: 1px solid var(--line); border-radius: 8px; display: grid; gap: 6px; }
+.card textarea, .card select { font: inherit; padding: 6px; border: 1px solid var(--line); border-radius: 6px; }
+@media (max-width: 600px) { pre.contract { max-height: none; } }

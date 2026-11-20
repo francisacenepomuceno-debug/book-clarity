@@ -7,7 +7,7 @@ import { SESSION_COOKIE, verifySession } from "@/auth/session";
  */
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  if (pathname.startsWith("/login") || pathname === "/setup" || pathname === "/setup-complete" || pathname.startsWith("/continue/") || pathname.startsWith("/pay/") || pathname.startsWith("/api/stripe/webhook") || pathname.startsWith("/api/cron/")) return NextResponse.next();
+  if (pathname.startsWith("/login") || pathname === "/setup" || pathname === "/setup-complete" || pathname.startsWith("/continue/") || pathname.startsWith("/onboard/") || pathname.startsWith("/pay/") || pathname.startsWith("/api/stripe/webhook") || pathname.startsWith("/api/cron/")) return NextResponse.next();
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   if (token && (await verifySession(token))) return NextResponse.next();
   return NextResponse.redirect(new URL("/login", req.url));
