@@ -25,7 +25,7 @@ export default async function CommissionsPage() {
 
   return (
     <>
-      <PortalHeader viewerName={viewer.name} showUsersLink={can(viewer.role, "users.manage")} showCommissionsLink />
+      <PortalHeader role={viewer.role} viewerName={viewer.name} />
       <main>
         <p><a href="/">← All clients</a></p>
         <h2>Commissions</h2>
@@ -65,7 +65,7 @@ export default async function CommissionsPage() {
               <ul className="plain">
                 {unassigned.map((c) => (
                   <li key={c.id}>
-                    {c.stripeSubscriptionId ? <a href={`/clients/${c.stripeSubscriptionId}#commission`}>{c.name}</a> : c.name}{" "}
+                    <a href={`/clients/${c.stripeSubscriptionId ?? c.id}#commission`}>{c.name}</a>{" "}
                     <span className="muted">· {STATUS_LABEL[c.status]}</span>
                   </li>
                 ))}

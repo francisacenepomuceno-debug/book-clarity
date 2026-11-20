@@ -4,7 +4,7 @@ import { can } from "@/auth/permissions";
 import type { LiveClientRow } from "@/stripe/mapSubscription";
 import type { ClientStatus } from "@/domain/clientStatus";
 
-type Base = Pick<LiveClientRow, "subscriptionId" | "name" | "status" | "packageName" | "sixMonthContract" | "nextChargeDate" | "pastDueSince">;
+type Base = Pick<LiveClientRow, "subscriptionId" | "name" | "status" | "packageName" | "sixMonthContract" | "nextChargeDate" | "pastDueSince"> & { clientType: "DIRECT" | "ACE" };
 type Financial = Pick<
   LiveClientRow,
   "customerId" | "email" | "packageMonthlyCents" | "cardFeeMonthlyCents" | "hasDiscount" | "autopay" | "paymentMethod" | "amountDueCents"
@@ -21,6 +21,7 @@ export function scopeRow(r: LiveClientRow, role: Role): ClientRow {
     sixMonthContract: r.sixMonthContract,
     nextChargeDate: r.nextChargeDate,
     pastDueSince: r.pastDueSince,
+    clientType: r.clientType ?? "DIRECT",
   };
   if (!can(role, "clients.viewFinancials")) return base;
   return {
@@ -64,4 +65,45 @@ export async function syncClientsFromSnapshot(rows: LiveClientRow[]): Promise<vo
       update: { name: r.name, email: r.email },
     });
   }
+}
+
+/** Adds Direct/ACE from the portal's client records to live Stripe rows. */
+export async function withClientTypes(rows: LiveClientRow[]): Promise<LiveClientRow[]> {
+  const aces = await db.client.findMany({
+    where: { type: "ACE", stripeSubscriptionId: { in: rows.map((r) => r.subscriptionId) } },
+    select: { stripeSubscriptionId: true },
+  });
+  const ace = new Set(aces.map((a) => a.stripeSubscriptionId));
+  return rows.map((r) => ({ ...r, clientType: ace.has(r.subscriptionId) ? "ACE" : "DIRECT" }));
+}
+
+/**
+ * ACE clients who aren't on a Stripe subscription yet (prepaid, or waiting to continue), as dashboard rows.
+ * Their row id is the portal client id, which the client page also accepts.
+ */
+export async function aceDashboardRows(): Promise<LiveClientRow[]> {
+  const clients = await db.client.findMany({
+    where: { type: "ACE", stripeSubscriptionId: null, status: { not: "ENDED" } },
+    orderBy: { name: "asc" },
+  });
+  const packages = await db.package.findMany({ where: { id: { in: clients.flatMap((c) => (c.packageId ? [c.packageId] : [])) } } });
+  const name = new Map(packages.map((p) => [p.id, p.name]));
+  return clients.map((c) => ({
+    clientType: "ACE" as const,
+    customerId: c.stripeCustomerId ?? "",
+    subscriptionId: c.id,
+    name: c.name,
+    email: c.email,
+    status: c.status,
+    packageName: c.packageId ? name.get(c.packageId) ?? "—" : "—",
+    sixMonthContract: false,
+    packageMonthlyCents: 0,
+    cardFeeMonthlyCents: 0,
+    hasDiscount: false,
+    autopay: false,
+    paymentMethod: "Prepaid by ACE",
+    nextChargeDate: null,
+    amountDueCents: 0,
+    pastDueSince: null,
+  }));
 }

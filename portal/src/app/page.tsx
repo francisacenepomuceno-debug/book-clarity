@@ -2,7 +2,7 @@ import { getLiveSnapshot } from "@/stripe/liveSnapshot";
 import { STATUS_LABEL, type ClientStatus } from "@/domain/clientStatus";
 import { formatUsd } from "@/lib/money";
 import { can, requirePermission } from "@/auth/permissions";
-import { scopeRow, type ClientRow } from "@/clients/queries";
+import { aceDashboardRows, scopeRow, withClientTypes, type ClientRow } from "@/clients/queries";
 import { PortalHeader } from "@/app/PortalHeader";
 import { fmtDate } from "@/lib/format";
 
@@ -16,8 +16,9 @@ const FILTERS: { key: ClientStatus | "ALL"; label: string }[] = [
   { key: "PAST_DUE", label: STATUS_LABEL.PAST_DUE },
   { key: "AT_RISK", label: STATUS_LABEL.AT_RISK },
   { key: "PAUSED", label: STATUS_LABEL.PAUSED },
+  { key: "PREPAID_ACE", label: STATUS_LABEL.PREPAID_ACE },
 ];
-const ORDER: ClientStatus[] = ["AT_RISK", "PAST_DUE", "UNPAID", "PAUSED", "CURRENT"];
+const ORDER: ClientStatus[] = ["AT_RISK", "PAST_DUE", "UNPAID", "CONTINUING_AWAITING_PM", "PAUSED", "CURRENT", "PREPAID_ACE", "ONBOARDING"];
 const sum = (rows: ClientRow[], f: (r: ClientRow) => number | undefined) => rows.reduce((n, r) => n + (f(r) ?? 0), 0);
 
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ status?: string; refresh?: string }> }) {
@@ -39,7 +40,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     );
   }
 
-  const rows = snap.rows.map((r) => scopeRow(r, viewer.role));
+  const rows = [...(await withClientTypes(snap.rows)), ...(await aceDashboardRows())].map((r) => scopeRow(r, viewer.role));
   const count = (s: ClientStatus) => rows.filter((r) => r.status === s).length;
   const billing = rows.filter((r) => r.status !== "PAUSED" && r.status !== "ENDED");
   const shown = (status === "ALL" ? rows : rows.filter((r) => r.status === status)).sort(
@@ -48,7 +49,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <PortalHeader showCommissionsLink={can(viewer.role, "commissions.view")} showUsersLink={can(viewer.role, "users.manage")} viewerName={viewer.name} livemode={snap.livemode} fetchedAt={snap.fetchedAt} refreshHref={`/?status=${status}&refresh=1`} />
+      <PortalHeader role={viewer.role} viewerName={viewer.name} livemode={snap.livemode} fetchedAt={snap.fetchedAt} refreshHref={`/?status=${status}&refresh=1`} />
       <main>
         <section className="kpis">
           {FILTERS.map((f) => (
@@ -70,7 +71,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
               </div>
               <div className="kpi">
                 <div className="label">Not on autopay</div>
-                <div className="value">{rows.filter((r) => r.autopay === false).length}</div>
+                <div className="value">{rows.filter((r) => r.autopay === false && r.clientType !== "ACE").length}</div>
                 <div className="sub">billed by emailed invoice</div>
               </div>
               <div className="kpi">
@@ -88,6 +89,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
               <tr>
                 <th>Client</th>
                 <th>Status</th>
+                <th>Type</th>
                 <th>Package</th>
                 {money && <th className="num">Monthly</th>}
                 {money && <th className="num">Card fee</th>}
@@ -105,6 +107,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                     {r.email && <div className="muted">{r.email}</div>}
                   </td>
                   <td><span className={`badge s-${r.status}`}>{STATUS_LABEL[r.status]}</span></td>
+                  <td>{r.clientType === "ACE" ? "ACE" : "Direct"}</td>
                   <td>
                     {r.packageName}
                     {r.sixMonthContract && <span className="muted"> · 6-month</span>}
@@ -120,7 +123,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
               ))}
               {shown.length === 0 && (
                 <tr>
-                  <td colSpan={money ? 9 : 5} className="muted">No clients in this group.</td>
+                  <td colSpan={money ? 10 : 6} className="muted">No clients in this group.</td>
                 </tr>
               )}
             </tbody>

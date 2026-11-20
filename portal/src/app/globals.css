@@ -70,3 +70,8 @@ header a { color: #fff; }
 .row-form button { padding: 5px 10px !important; }
 .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 16px; }
 ul.plain { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
+.stack-form { display: grid; gap: 4px; }
+.check { display: flex !important; align-items: center; gap: 6px; font-weight: 400 !important; color: var(--text) !important; }
+button.secondary { background: #fff !important; color: var(--brand) !important; border: 1px solid var(--brand) !important; }
+.copybox { flex-basis: 100%; font-size: 12px; }
+.copybox input { width: 100%; font: inherit; padding: 6px; border: 1px solid var(--line); border-radius: 6px; margin-top: 4px; }

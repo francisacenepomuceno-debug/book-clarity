@@ -14,7 +14,7 @@ export default async function UsersPage() {
   const loginUrl = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}/login`;
   return (
     <>
-      <PortalHeader showCommissionsLink={can(viewer.role, "commissions.view")} viewerName={viewer.name} showUsersLink />
+      <PortalHeader role={viewer.role} viewerName={viewer.name} />
       <main>
         <p><a href="/">← All clients</a></p>
         <h2>Users</h2>
