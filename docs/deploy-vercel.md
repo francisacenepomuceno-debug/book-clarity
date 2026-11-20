@@ -105,6 +105,27 @@ It is designed to be safe on live data:
 - Copied invoices never earn commission or count toward a client's 12 commission months; months paid before the portal are entered on each client ("months before the portal") instead.
 - Clients who have left (all their subscriptions cancelled) are added as ended clients, so past revenue includes them. ACE's own Stripe customer is skipped.
 
+## 7d. Go-live: move existing clients in, then switch on
+
+Do these in order. Nothing here changes anything in Stripe. Client notices and the 3% card fee stay **off** until step 9.
+
+1. **Sync clients:** open the dashboard once. Every Stripe subscription becomes a portal client, and each is linked to its package when the package name or Stripe price matches.
+2. **Load history:** run the backfill (section 7c).
+3. **Packages:** on the Packages page, set each package's Stripe price and check its contract. The page lists any client that isn't linked to a package yet.
+4. **Past ACE batches:** on the ACE page, add each past batch with **Already paid** and **Historical** ticked. Historical batches never post the months 1–6 commission again, because it was already settled.
+5. **Commission spreadsheet:** go to Commissions → **Import the commission spreadsheet**, download the template, fill it in and upload it. Check the preview, then press **Apply**. Rows that don't match are listed for you to fix; importing again is safe.
+6. **Fix what's left:** fix the import's unmatched rows and the Commissions → "Clients without an owner" list.
+7. **Checklist:** the Super Admin opens **Launch** (top bar). Work through the automatic checks and tick each manual item when it's done:
+   - surcharge registration;
+   - telling card clients about the fee;
+   - Stripe's own reminder emails off;
+   - customer portal set up;
+   - webhook events on;
+   - a test-mode run;
+   - history loaded.
+8. **Before notices go on,** every active ACE client must have a start date (step 5 or the ACE page), so no prepaid client is reminded to pay.
+9. **Turn on client notices** on the Launch page. Then **turn on the card fee** once card-paying clients have had notice.
+
 ## 8. Optional: your own address
 
 To use your own address, such as `portal.bookclarity.com`:
