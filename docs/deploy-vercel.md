@@ -100,7 +100,10 @@ Reports read the portal's own copy of your Stripe invoices. New invoices arrive 
    npx tsx scripts/backfill-invoices.ts --since 2025-01-01
    ```
 
-Old unpaid invoices are copied without a "failed on" date, so they never trigger payment reminders or suspension.
+It is designed to be safe on live data:
+- Old unpaid invoices are copied without a "failed on" date, so they never trigger payment reminders or suspension.
+- Copied invoices never earn commission or count toward a client's 12 commission months; months paid before the portal are entered on each client ("months before the portal") instead.
+- Clients who have left (all their subscriptions cancelled) are added as ended clients, so past revenue includes them. ACE's own Stripe customer is skipped.
 
 ## 8. Optional: your own address
 
