@@ -54,7 +54,13 @@ describe("client onboarding steps", () => {
     expect((await loadOnboarding(token)).step).toBe("payment");
     expect((await saveIntake(token, { q0: "x" }, now)).ok).toBe(false);
     await db.onboarding.update({ where: { id }, data: { feePaidAt: now } });
-    expect(await saveIntake(token, { q0: "Retail" }, now)).toEqual({ ok: true });
+    await db.setting.create({ data: { key: "onboarding", value: { intakeQuestions: "Industry | text | required\nWebsite? | yesno\nURL | text | required | if: Website? = YES" } } });
+    expect((await saveIntake(token, { q0: "", q1: "NO" }, now)).ok).toBe(false); // required
+    expect(await saveIntake(token, { q0: "Retail", q1: "NO", q2: "hidden.example" }, now)).toEqual({ ok: true });
+    expect((await db.onboarding.findUniqueOrThrow({ where: { id } })).intake).toEqual([
+      { question: "Industry", answer: "Retail" },
+      { question: "Website?", answer: "NO" },
+    ]);
     expect(await confirmCallBooked(token, now)).toEqual({ ok: true });
     expect((await db.onboarding.findUniqueOrThrow({ where: { id } })).completedAt).toEqual(now);
   });
@@ -103,10 +109,10 @@ describe("client onboarding steps", () => {
     const qs = parseIntakeQuestions(DEFAULT_INTAKE_QUESTIONS);
     expect(qs.length).toBeGreaterThan(5);
     expect(parseIntakeQuestions("Industry? | choice:Retail,Services\nNotes | long\nAny staff? | yesno\nPlain")).toEqual([
-      { label: "Industry?", kind: "choice", options: ["Retail", "Services"] },
-      { label: "Notes", kind: "long", options: [] },
-      { label: "Any staff?", kind: "yesno", options: [] },
-      { label: "Plain", kind: "text", options: [] },
+      { label: "Industry?", kind: "choice", options: ["Retail", "Services"], required: false, showIf: null },
+      { label: "Notes", kind: "long", options: [], required: false, showIf: null },
+      { label: "Any staff?", kind: "yesno", options: [], required: false, showIf: null },
+      { label: "Plain", kind: "text", options: [], required: false, showIf: null },
     ]);
   });
 });

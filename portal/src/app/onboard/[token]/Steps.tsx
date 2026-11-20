@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
+import { isShown, type IntakeQuestion } from "@/domain/intake";
 import { callBookedAction, detailsAction, intakeAction, packageAction, signAction, type StepResult } from "./actions";
 
 const Err = ({ s }: { s: StepResult }) => (s.error ? <p className="form-error">{s.error}</p> : null);
@@ -71,25 +72,49 @@ export function SignStep(p: { token: string; signerName: string; quickbooksOptio
   );
 }
 
-export function IntakeStep(p: { token: string; questions: { label: string; kind: string; options: string[] }[] }) {
+export function IntakeStep(p: { token: string; questions: IntakeQuestion[] }) {
   const [s, action, pending] = useActionState(intakeAction, {});
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const set = (k: string, v: string) => setAnswers((a) => ({ ...a, [k]: v }));
   return (
     <form action={action} className="stack">
       <input type="hidden" name="token" value={p.token} />
-      {p.questions.map((q, i) => (
-        <label key={i}>
-          {q.label}
-          {q.kind === "long" ? (
-            <textarea name={`q${i}`} rows={3} />
-          ) : q.kind === "yesno" ? (
-            <select name={`q${i}`} defaultValue=""><option value="">—</option><option>Yes</option><option>No</option></select>
-          ) : q.kind === "choice" ? (
-            <select name={`q${i}`} defaultValue=""><option value="">—</option>{q.options.map((o) => <option key={o}>{o}</option>)}</select>
-          ) : (
-            <input name={`q${i}`} />
-          )}
-        </label>
-      ))}
+      {p.questions.map((q, i) => {
+        if (!isShown(p.questions, i, answers)) return null;
+        if (q.kind === "heading") return <h3 key={i} style={{ margin: "10px 0 0" }}>{q.label}</h3>;
+        if (q.kind === "note") return <p key={i} className="muted" style={{ margin: 0 }}>{q.label}</p>;
+        const name = `q${i}`;
+        const label = <span>{q.label}{q.required && <span aria-hidden="true"> *</span>}</span>;
+        if (q.kind === "yesno" || (q.kind === "choice" && q.options.length <= 2)) {
+          const opts = q.kind === "yesno" ? ["YES", "NO"] : q.options;
+          return (
+            <fieldset key={i}>
+              <legend>{label}</legend>
+              {opts.map((o) => (
+                <label key={o} className="check">
+                  <input type="radio" name={name} value={o} required={q.required} onChange={() => set(name, o)} /> {q.kind === "yesno" ? (o === "YES" ? "Yes" : "No") : o}
+                </label>
+              ))}
+            </fieldset>
+          );
+        }
+        return (
+          <label key={i}>
+            {label}
+            {q.kind === "long" ? (
+              <textarea name={name} rows={3} required={q.required} onChange={(e) => set(name, e.target.value)} />
+            ) : q.kind === "choice" ? (
+              <select name={name} defaultValue="" required={q.required} onChange={(e) => set(name, e.target.value)}>
+                <option value="">Select an option</option>
+                {q.options.map((o) => <option key={o}>{o}</option>)}
+              </select>
+            ) : (
+              <input name={name} inputMode={q.kind === "number" ? "decimal" : undefined} required={q.required} onChange={(e) => set(name, e.target.value)} />
+            )}
+          </label>
+        );
+      })}
+      <p className="muted" style={{ margin: 0 }}>* required</p>
       <button disabled={pending}>Continue</button>
       <Err s={s} />
     </form>

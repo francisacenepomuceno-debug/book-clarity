@@ -4,7 +4,7 @@ import { nextStep, type OnboardingStep } from "@/domain/onboarding";
 import { renderContract, sha256 } from "@/domain/contract";
 import { contractFor } from "@/packages/contracts";
 import { onboardingIdFromToken } from "@/onboarding/start";
-import { getCountersigner, getOnboardingSettings, parseIntakeQuestions } from "@/settings/onboarding";
+import { checkIntake, getCountersigner, getOnboardingSettings, parseIntakeQuestions } from "@/settings/onboarding";
 import { sendNotice } from "@/notify/send";
 import { templates } from "@/notify/templates";
 import { baseUrl } from "@/notify/payments";
@@ -162,9 +162,9 @@ export async function intakeQuestions() {
 export async function saveIntake(token: string, answers: Record<string, string>, now: Date = new Date()): Promise<ActionResult> {
   const l = await at(token, "intake");
   if ("error" in l) return { ok: false, error: l.error };
-  const qs = await intakeQuestions();
-  const intake = qs.map((q, i) => ({ question: q.label, answer: String(answers[`q${i}`] ?? "").trim() }));
-  const ok = await advance(l.onboarding.id, { intakeAt: null }, { intake, intakeAt: now }, now);
+  const checked = checkIntake(await intakeQuestions(), answers);
+  if (!checked.ok) return { ok: false, error: checked.error };
+  const ok = await advance(l.onboarding.id, { intakeAt: null }, { intake: checked.answers, intakeAt: now }, now);
   return ok ? { ok: true } : { ok: false, error: "This step isn't available right now. Please reload the page." };
 }
 

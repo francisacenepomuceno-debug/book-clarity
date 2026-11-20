@@ -20,7 +20,7 @@ export function OnboardingSettingsForm(p: { settings: OnboardingSettings; owners
       <label>Suspend unpaid clients after (days since the first failed payment)
         <input name="suspendAfterDays" type="number" min={7} max={120} defaultValue={p.settings.suspendAfterDays} />
       </label>
-      <label>Questionnaire (one question per line; add <code>| long</code>, <code>| yesno</code> or <code>| choice:A,B,C</code> after a question to change its answer type)
+      <label>Questionnaire. One question per line: <code>Question | type | required | if: Earlier question = Answer</code>. Types: text (default), <code>long</code>, <code>number</code>, <code>yesno</code> (answers YES / NO), <code>choice: A; B; C</code>. A line starting <code>## </code> is a section heading and <code>&gt; </code> a note. The <code>if:</code> part shows a follow-up only for that answer and must match the earlier question exactly.
         <textarea name="intakeQuestions" rows={16} defaultValue={p.settings.intakeQuestions} style={{ fontFamily: "monospace" }} />
       </label>
       <button disabled={pending}>Save</button>
