@@ -1,5 +1,6 @@
 import type { Role } from "@prisma/client";
 import { db } from "@/lib/db";
+import { matchPackage } from "@/domain/packageMatch";
 import { can } from "@/auth/permissions";
 import { refreshClientStatus } from "@/stripe/clientStatusSync";
 import type { LiveClientRow } from "@/stripe/mapSubscription";
@@ -45,6 +46,8 @@ const URGENCY: ClientStatus[] = ["SUSPENDED", "AT_RISK", "PAST_DUE", "UNPAID", "
  * so webhooks and discounts can find it. Only Stripe-owned fields are written; Direct/ACE etc. are left alone.
  */
 export async function syncClientsFromSnapshot(rows: LiveClientRow[]): Promise<void> {
+  const packages = await db.package.findMany({ select: { id: true, name: true, stripePriceId: true } });
+  const packageOf = (r: LiveClientRow) => (r.priceItems?.length ? matchPackage(r.priceItems, packages) : null);
   const byCustomer = new Map<string, LiveClientRow>();
   for (const r of rows) {
     const cur = byCustomer.get(r.customerId);
@@ -64,6 +67,7 @@ export async function syncClientsFromSnapshot(rows: LiveClientRow[]): Promise<vo
           phone: r.phone ?? null,
           status: r.status,
           subscriptionStatus: r.status === "PAUSED" ? "paused" : null,
+          packageId: packageOf(r),
         },
       });
       continue;
@@ -73,7 +77,14 @@ export async function syncClientsFromSnapshot(rows: LiveClientRow[]): Promise<vo
     await db.client.update({
       where: { id: existing.id },
       // A changed email/phone means the cached GHL contact may be the wrong person: look it up again next time.
-      data: { name: r.name, email: r.email, phone, ...(contactChanged ? { ghlContactId: null } : {}) },
+      data: {
+        name: r.name,
+        email: r.email,
+        phone,
+        ...(contactChanged ? { ghlContactId: null } : {}),
+        // Link the package from Stripe only when none is set; a package chosen by hand is never overwritten.
+        ...(existing.packageId ? {} : { packageId: packageOf(r) }),
+      },
     });
   }
 }

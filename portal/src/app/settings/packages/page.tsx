@@ -1,4 +1,5 @@
 import { requirePermission } from "@/auth/permissions";
+import { db } from "@/lib/db";
 import { listPackages } from "@/packages/packages";
 import { getAceContactEmail, getAceCustomerId } from "@/ace/batches";
 import { formatUsd } from "@/lib/money";
@@ -13,12 +14,19 @@ export default async function PackagesPage() {
   const viewer = await requirePermission("ace.manage");
   const [packages, aceCustomer, aceContact] = await Promise.all([listPackages(), getAceCustomerId(), getAceContactEmail()]);
   const contracts = await Promise.all(packages.map((p) => contractFor(p)));
+  const unlinked = await db.client.findMany({ where: { packageId: null, endedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true, stripeSubscriptionId: true } });
   return (
     <>
       <PortalHeader role={viewer.role} viewerName={viewer.name} />
       <main>
         <p><a href="/">← All clients</a></p>
         <h2>Packages</h2>
+        {unlinked.length > 0 && (
+          <details className="panel pad">
+            <summary><strong>{unlinked.length} active client{unlinked.length === 1 ? "" : "s"} not linked to a package</strong> <span className="muted">· linked automatically from Stripe when a package's name or Stripe price matches; otherwise set it in the import</span></summary>
+            <ul className="plain">{unlinked.map((c) => <li key={c.id}><a href={`/clients/${c.stripeSubscriptionId ?? c.id}`}>{c.name}</a></li>)}</ul>
+          </details>
+        )}
         <p className="muted">The monthly price is the list price used for ACE commission (6 × monthly). Link each package to its Stripe price so ACE clients who continue can be put on autopay.</p>
         {packages.map((p, i) => (
           <section className="panel pad" key={p.id}>
