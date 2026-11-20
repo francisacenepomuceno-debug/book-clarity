@@ -19,18 +19,28 @@ async function aceManager() {
   }
 }
 
-/** ACE clients within 30 days of the end of their prepaid period (or past it) who have no subscription yet. */
+/**
+ * ACE clients within 60 days of the end of their prepaid period (or past it) who have no subscription yet,
+ * including ones whose end an Owner confirmed but whose last day hasn't passed (they can still be won back).
+ */
 export async function dueForContinuation(now: Date = new Date()) {
   const rows = await db.client.findMany({
     where: {
       type: "ACE",
-      endedAt: null,
+      OR: [{ endedAt: null }, { endedAt: { gt: now } }],
       stripeSubscriptionId: null,
       acePrepaidUntil: { not: null, lte: new Date(now.getTime() + CONTINUATION_NOTICE_DAYS * 86400_000) },
     },
     orderBy: { acePrepaidUntil: "asc" },
   });
-  return rows.map((c) => ({ clientId: c.id, name: c.name, prepaidUntil: c.acePrepaidUntil!, decision: c.continuationDecision }));
+  return rows.map((c) => ({
+    clientId: c.id,
+    name: c.name,
+    prepaidUntil: c.acePrepaidUntil!,
+    decision: c.continuationDecision,
+    clientAnswer: c.clientAnswer,
+    clientAnsweredAt: c.clientAnsweredAt,
+  }));
 }
 
 export function continuationToken(clientId: string): string {
@@ -48,17 +58,59 @@ export async function markContinuing(clientId: string, baseUrl: string): Promise
   if (!pkg) return { ok: false, error: "This client has no package." };
   if (!pkg.isCustom && !pkg.stripePriceId) return { ok: false, error: "Link this package to a Stripe price in Settings → Packages." };
 
-  if (!client.stripeCustomerId) {
-    const cus = await getStripe().customers.create(
-      { name: client.name, email: client.email ?? undefined, metadata: { clientId } },
-      { idempotencyKey: `bc-ace-cus-${clientId}` },
-    );
-    await db.client.update({ where: { id: clientId }, data: { stripeCustomerId: cus.id } });
-  }
-  await db.client.update({ where: { id: clientId }, data: { continuationDecision: "CONTINUING" } });
+  if (client.endedAt && client.endedAt <= new Date()) return { ok: false, error: "This client's service has already ended." };
+  await ensureCustomer(client);
+  // Winning a client back undoes a confirmed end, up to their last prepaid day.
+  await db.client.update({ where: { id: clientId }, data: { continuationDecision: "CONTINUING", endedAt: null } });
   await refreshClientStatus(clientId);
   await writeAudit({ actorId: actor.id, action: "ace_continuing", entity: "Client", entityId: clientId });
   return { ok: true, setupUrl: `${baseUrl}/continue/${continuationToken(clientId)}` };
+}
+
+async function ensureCustomer(client: { id: string; name: string; email: string | null; stripeCustomerId: string | null }): Promise<string> {
+  if (client.stripeCustomerId) return client.stripeCustomerId;
+  const cus = await getStripe().customers.create(
+    { name: client.name, email: client.email ?? undefined, metadata: { clientId: client.id } },
+    { idempotencyKey: `bc-ace-cus-${client.id}` },
+  );
+  await db.client.update({ where: { id: client.id }, data: { stripeCustomerId: cus.id } });
+  return cus.id;
+}
+
+const LINK_INACTIVE = "This link is no longer active. If you'd like to continue with Book Clarity, please contact us.";
+
+/**
+ * Public Yes/No answer from the client's link. The link works until the last prepaid day (or later if an Owner
+ * marked them continuing), unless an Owner confirmed the end. "No" ends nothing: Owners follow up and the client
+ * can still say Yes until the last day.
+ */
+export async function answerContinuation(
+  token: string,
+  answer: "YES" | "NO",
+  baseUrl: string,
+  now: Date = new Date(),
+): Promise<{ url?: string; message?: string; error?: string }> {
+  const clientId = verifyLink("ace-continue", token);
+  const client = clientId ? await db.client.findUnique({ where: { id: clientId } }) : null;
+  if (!client || client.type !== "ACE" || !client.aceSlotId) return { error: "This link isn't valid. Please use the link Book Clarity sent you." };
+  const beforeEnd = client.acePrepaidUntil !== null && now <= client.acePrepaidUntil;
+  if (client.stripeSubscriptionId) return { message: "You're all set: your autopay with Book Clarity is already in place. Thank you!" };
+  if (client.continuationDecision === "ENDING" || !(beforeEnd || client.continuationDecision === "CONTINUING")) return { error: LINK_INACTIVE };
+
+  if (answer === "NO") {
+    await db.client.update({ where: { id: client.id }, data: { clientAnswer: "NO", clientAnsweredAt: now } });
+    await writeAudit({ actorId: null, action: "ace_client_answered_no", entity: "Client", entityId: client.id });
+    return {
+      message:
+        "Thank you for letting us know. Your service continues until the end of your ACE period. If you change your mind before then, just use this link again or reply to our message.",
+    };
+  }
+  await ensureCustomer(client);
+  await db.client.update({ where: { id: client.id }, data: { clientAnswer: "YES", clientAnsweredAt: now, continuationDecision: "CONTINUING" } });
+  await refreshClientStatus(client.id);
+  await writeAudit({ actorId: null, action: "ace_client_answered_yes", entity: "Client", entityId: client.id });
+  const r = await startSetupFromToken(token, baseUrl);
+  return "url" in r ? { url: r.url } : { error: r.error };
 }
 
 /** Public: the client opened their link. Returns a fresh Stripe setup page, or why the link no longer works. */

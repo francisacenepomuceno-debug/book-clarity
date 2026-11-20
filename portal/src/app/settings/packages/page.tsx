@@ -1,16 +1,16 @@
 import { requirePermission } from "@/auth/permissions";
 import { listPackages } from "@/packages/packages";
-import { getAceCustomerId } from "@/ace/batches";
+import { getAceContactEmail, getAceCustomerId } from "@/ace/batches";
 import { formatUsd } from "@/lib/money";
 import { PortalHeader } from "@/app/PortalHeader";
-import { AceCustomerForm, PackageForm } from "@/app/ace/Forms";
+import { AceContactForm, AceCustomerForm, PackageForm } from "@/app/ace/Forms";
 
 export const dynamic = "force-dynamic";
 const dollars = (c: number) => (c / 100).toFixed(2);
 
 export default async function PackagesPage() {
   const viewer = await requirePermission("ace.manage");
-  const [packages, aceCustomer] = await Promise.all([listPackages(), getAceCustomerId()]);
+  const [packages, aceCustomer, aceContact] = await Promise.all([listPackages(), getAceCustomerId(), getAceContactEmail()]);
   return (
     <>
       <PortalHeader role={viewer.role} viewerName={viewer.name} />
@@ -32,6 +32,7 @@ export default async function PackagesPage() {
           <h3>ACE billing</h3>
           <p className="muted">The Stripe customer that ACE batch invoices are sent to. Create ACE as a customer in Stripe (with ACE's billing email), then paste its ID here.</p>
           <AceCustomerForm current={aceCustomer ?? ""} />
+          <AceContactForm current={aceContact ?? ""} />
         </section>
       </main>
     </>

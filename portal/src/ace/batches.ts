@@ -39,12 +39,30 @@ export async function setAceCustomer(stripeCustomerId: string): Promise<ActionRe
   if (!/^cus_[A-Za-z0-9]+$/.test(id)) return { ok: false, error: "Enter a Stripe customer ID (it starts with cus_)." };
   const c = await getStripe().customers.retrieve(id);
   if ((c as Stripe.DeletedCustomer).deleted) return { ok: false, error: "That Stripe customer was deleted." };
-  await db.setting.upsert({ where: { key: ACE_SETTING }, create: { key: ACE_SETTING, value: { stripeCustomerId: id } }, update: { value: { stripeCustomerId: id } } });
+  const current = ((await db.setting.findUnique({ where: { key: ACE_SETTING } }))?.value ?? {}) as Record<string, unknown>;
+  await db.setting.upsert({ where: { key: ACE_SETTING }, create: { key: ACE_SETTING, value: { ...current, stripeCustomerId: id } }, update: { value: { ...current, stripeCustomerId: id } } });
   await writeAudit({ actorId: actor.id, action: "ace_customer_set", entity: "Setting", entityId: ACE_SETTING, after: { stripeCustomerId: id } });
   return { ok: true };
 }
 
 type Line = { packageId: string; quantity: number; unitPriceCents: number };
+
+export async function getAceContactEmail(): Promise<string | null> {
+  const row = await db.setting.findUnique({ where: { key: ACE_SETTING } });
+  return (row?.value as { contactEmail?: string } | null)?.contactEmail ?? null;
+}
+
+/** ACE's billing contact, who gets unpaid-batch reminders. */
+export async function setAceContactEmail(email: string): Promise<ActionResult> {
+  const actor = await aceManager();
+  if (!actor) return FORBIDDEN;
+  const clean = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return { ok: false, error: "Enter a valid email address." };
+  const current = ((await db.setting.findUnique({ where: { key: ACE_SETTING } }))?.value ?? {}) as Record<string, unknown>;
+  await db.setting.upsert({ where: { key: ACE_SETTING }, create: { key: ACE_SETTING, value: { ...current, contactEmail: clean } }, update: { value: { ...current, contactEmail: clean } } });
+  await writeAudit({ actorId: actor.id, action: "ace_contact_set", entity: "Setting", entityId: ACE_SETTING, after: { contactEmail: clean } });
+  return { ok: true };
+}
 
 /**
  * Records an ACE purchase and creates its slots. Unless it was already paid outside the portal (historical),

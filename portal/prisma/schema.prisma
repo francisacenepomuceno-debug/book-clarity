@@ -86,6 +86,8 @@ model Client {
   acePrepaidUntil       DateTime?
   aceSlotId             String?
   continuationDecision  String?
+  clientAnswer          String?
+  clientAnsweredAt      DateTime?
   aceSetupSessionId     String?
   createdAt             DateTime     @default(now())
   endedAt               DateTime?

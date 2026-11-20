@@ -93,16 +93,17 @@ export default async function AcePage({ searchParams }: { searchParams: Promise<
         {due.length > 0 && (
           <section className="panel pad">
             <h3>Coming up on month 6</h3>
-            <p className="muted">Ask each client whether they'll continue. "Continuing" gives you a link for them to set up autopay; their first charge is the day after the prepaid period.</p>
+            <p className="muted">Clients are emailed 60, 30 and 14 days before the end and can answer Yes or No themselves. A "No" ends nothing: follow up, and mark them continuing if you win them back. Service ends only when you confirm it.</p>
             <table>
-              <thead><tr><th>Client</th><th>Prepaid until</th><th>Decision</th><th></th></tr></thead>
+              <thead><tr><th>Client</th><th>Prepaid until</th><th>Client's answer</th><th>Decision</th><th></th></tr></thead>
               <tbody>
                 {due.map((c) => (
                   <tr key={c.clientId}>
                     <td><a href={`/clients/${c.clientId}`}>{c.name}</a></td>
                     <td>{fmtDate(c.prepaidUntil)}</td>
-                    <td>{c.decision === "CONTINUING" ? "Continuing — waiting for payment method" : c.decision === "ENDING" ? "Not continuing" : "Not asked yet"}</td>
-                    <td>{c.decision !== "ENDING" && <ContinuationButtons clientId={c.clientId} />}</td>
+                    <td>{c.clientAnswer === "YES" ? `Yes (${fmtDate(c.clientAnsweredAt)})` : c.clientAnswer === "NO" ? `No (${fmtDate(c.clientAnsweredAt)})` : "No answer yet"}</td>
+                    <td>{c.decision === "CONTINUING" ? "Continuing — waiting for payment method" : c.decision === "ENDING" ? "End confirmed" : "Open"}</td>
+                    <td><ContinuationButtons clientId={c.clientId} decision={c.decision} /></td>
                   </tr>
                 ))}
               </tbody>

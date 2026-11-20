@@ -51,9 +51,9 @@ beforeEach(async () => {
 });
 
 describe("dueForContinuation", () => {
-  it("lists ACE clients within 30 days of the end, not those further out", async () => {
-    await aceClient("Soon Co", 20);
-    await aceClient("Later Co", 60);
+  it("lists ACE clients within 60 days of the end, not those further out", async () => {
+    await aceClient("Soon Co", 50);
+    await aceClient("Later Co", 75);
     expect((await dueForContinuation()).map((c) => c.name)).toEqual(["Soon Co"]);
   });
 });

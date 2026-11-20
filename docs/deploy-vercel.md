@@ -54,6 +54,17 @@ Go to **Deployments → Redeploy**, or push to the production branch. When it fi
 
    Each person's details are shown once. Send them privately.
 
+## 6b. Connect Book Clarity's GHL (for reminders and notices)
+
+Use **Book Clarity's own GHL account** (not any other business's sub-account).
+
+1. In GHL, open the Book Clarity sub-account → **Settings → Private Integrations → Create new integration**.
+2. Give it the scopes **contacts.write**, **contacts.readonly**, **conversations/message.write** and **conversations.readonly**.
+3. Copy the token into Vercel as `GHL_API_TOKEN`, and the sub-account's **Location ID** (Settings → Business Profile) as `GHL_LOCATION_ID`. Redeploy.
+4. Make sure the sub-account can send email (a sending domain) and SMS (a phone number) in GHL.
+
+Messages appear in each contact's GHL **Conversations**. The schedule lives in the portal: 3 days before a charge; on a decline and days 3, 7 and 14; an Owner alert at day 21; ACE clients 60, 30 and 14 days before their prepaid period ends; ACE batch reminders at 7 and 14 days.
+
 ## 7. Connect Stripe's live updates
 
 1. In Stripe, go to **Developers → Webhooks → Add endpoint**.
@@ -62,8 +73,13 @@ Go to **Deployments → Redeploy**, or push to the production branch. When it fi
    - `invoice.created`, `invoice.finalized`, `invoice.updated`, `invoice.paid`, `invoice.payment_failed`, `invoice.voided`, `invoice.marked_uncollectible`
    - `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`
    - `customer.updated`
+   - `invoice.upcoming`, `charge.refunded`, `checkout.session.completed`
 4. Copy the endpoint's **Signing secret** (it starts `whsec_`) into Vercel as `STRIPE_WEBHOOK_SECRET`, then **Redeploy**.
 5. In Stripe, the endpoint's next deliveries should show **200 OK**.
+
+## 7b. Stop Stripe's own reminder emails
+
+The portal sends reminders through GHL, so turn off Stripe's duplicates the same day GHL is connected: in Stripe, **Settings → Billing → Subscriptions and emails**, turn off the emails for **failed payments** and **upcoming renewals**. Keep **Smart Retries** on. Also enable the **Customer portal** (Settings → Billing → Customer portal) with "update payment methods" allowed; the "update payment method" links use it.
 
 ## 8. Optional: your own address
 

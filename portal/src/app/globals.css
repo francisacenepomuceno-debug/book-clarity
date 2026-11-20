@@ -75,6 +75,9 @@ ul.plain { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px;
 button.secondary { background: #fff !important; color: var(--brand) !important; border: 1px solid var(--brand) !important; }
 .copybox { flex-basis: 100%; font-size: 12px; }
 .copybox input { width: 100%; font: inherit; padding: 6px; border: 1px solid var(--line); border-radius: 6px; margin-top: 4px; }
-.paybtn { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; text-decoration: none; color: var(--text); background: #fff; }
+.paybtn { width: 100%; text-align: left; font: inherit; cursor: pointer; display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; text-decoration: none; color: var(--text); background: #fff; }
 .paybtn:hover { border-color: var(--brand); }
 .paybtn span { color: var(--muted); font-size: 13px; }
+.card button.paybtn { background: #fff; color: var(--text); border: 1px solid var(--line); padding: 14px 16px; border-radius: 8px; }
+.card button.paybtn:hover { border-color: var(--brand); }
+.card form + form { margin-top: 10px; }

@@ -1,7 +1,9 @@
 import { startOfDayIn } from "@/domain/commission";
 
 export const ACE_PREPAID_MONTHS = 6;
-export const CONTINUATION_NOTICE_DAYS = 30;
+/** ACE clients are first told 60 days before their prepaid period ends (owner, 2026-11-20). */
+export const CONTINUATION_NOTICE_DAYS = 60;
+export const CONTINUATION_REMINDER_DAYS = [60, 30, 14] as const;
 
 /**
  * Last instant of an ACE client's prepaid period: the end of the day before the same day-of-month 6 months

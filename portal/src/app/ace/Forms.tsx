@@ -9,6 +9,7 @@ import {
   recordPaymentAction,
   resendInvoiceAction,
   cardPayLinkAction,
+  setAceContactAction,
   savePackageAction,
   setAceCustomerAction,
   type AceFormResult,
@@ -151,20 +152,27 @@ export function AssignSlotForm(p: { batchId: string; packages: (Pkg & { open: nu
   );
 }
 
-export function ContinuationButtons({ clientId }: { clientId: string }) {
+export function ContinuationButtons({ clientId, decision }: { clientId: string; decision?: string | null }) {
   const [c, cont, p1] = useActionState<AceFormResult, FormData>(continueAction, {});
   const [e, end, p2] = useActionState<AceFormResult, FormData>(endAction, {});
   return (
     <div className="row-form">
-      <form action={cont}><input type="hidden" name="clientId" value={clientId} /><button disabled={p1}>Continuing</button></form>
-      <form action={end}><input type="hidden" name="clientId" value={clientId} /><button className="secondary" disabled={p2}>Not continuing</button></form>
+      {decision !== "CONTINUING" && (
+        <form action={cont}><input type="hidden" name="clientId" value={clientId} /><button disabled={p1}>Mark continuing</button></form>
+      )}
+      {decision === "CONTINUING" && (
+        <form action={cont}><input type="hidden" name="clientId" value={clientId} /><button className="secondary" disabled={p1}>Get their link</button></form>
+      )}
+      {decision !== "ENDING" && (
+        <form action={end}><input type="hidden" name="clientId" value={clientId} /><button className="secondary" disabled={p2}>Confirm end of service</button></form>
+      )}
       {c.setupUrl && (
         <div className="copybox">
-          Send this link to the client to set up autopay: <input readOnly value={c.setupUrl} onFocus={(ev) => ev.currentTarget.select()} />
+          Send this link to the client (they choose Yes or No; Yes sets up autopay): <input readOnly value={c.setupUrl} onFocus={(ev) => ev.currentTarget.select()} />
         </div>
       )}
       {(c.error || e.error) && <span className="form-error">{c.error || e.error}</span>}
-      {e.ok && <span className="form-ok">Will end when the prepaid period ends.</span>}
+      {e.ok && <span className="form-ok">Ends when the prepaid period ends. You can still mark them continuing until then.</span>}
     </div>
   );
 }
@@ -192,6 +200,17 @@ export function CardPayLinkForm({ batchId }: { batchId: string }) {
         </div>
       )}
       {s.error && <span className="form-error">{s.error}</span>}
+    </form>
+  );
+}
+
+export function AceContactForm({ current }: { current: string }) {
+  const [s, action, pending] = useActionState<AceFormResult, FormData>(setAceContactAction, {});
+  return (
+    <form action={action} className="inline-form">
+      <label className="grow">ACE billing contact email<input name="email" type="email" defaultValue={current} placeholder="billing@ace…" required /></label>
+      <button disabled={pending}>Save</button>
+      <Msg s={s} ok="Saved. Unpaid-batch reminders go to this address." />
     </form>
   );
 }

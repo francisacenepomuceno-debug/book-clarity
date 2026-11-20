@@ -5,7 +5,7 @@ import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/auth/permissions";
 import { savePackage } from "@/packages/packages";
-import { createBatch, issueBatchInvoice, recordBatchPayment, setAceCustomer } from "@/ace/batches";
+import { createBatch, issueBatchInvoice, recordBatchPayment, setAceContactEmail, setAceCustomer } from "@/ace/batches";
 import { assignSlot } from "@/ace/slots";
 import { markContinuing, markEnded } from "@/ace/continuation";
 import { aceCardPayLink } from "@/ace/cardPay";
@@ -118,4 +118,11 @@ export async function cardPayLinkAction(_: AceFormResult, f: FormData): Promise<
   const r = await aceCardPayLink(str(f.get("batchId")), base);
   if (!r.ok) return { error: r.error };
   return { ok: true, setupUrl: r.url };
+}
+
+export async function setAceContactAction(_: AceFormResult, f: FormData): Promise<AceFormResult> {
+  const r = await setAceContactEmail(str(f.get("email")));
+  if (!r.ok) return { error: r.error };
+  revalidatePath("/settings/packages");
+  return { ok: true };
 }
