@@ -8,6 +8,7 @@ import {
   endAction,
   recordPaymentAction,
   resendInvoiceAction,
+  cardPayLinkAction,
   savePackageAction,
   setAceCustomerAction,
   type AceFormResult,
@@ -175,6 +176,22 @@ export function ResendInvoiceForm({ batchId }: { batchId: string }) {
       <input type="hidden" name="batchId" value={batchId} />
       <button disabled={pending}>Send invoice again</button>
       <Msg s={s} ok="ACE's invoice was sent." />
+    </form>
+  );
+}
+
+export function CardPayLinkForm({ batchId }: { batchId: string }) {
+  const [s, action, pending] = useActionState<AceFormResult, FormData>(cardPayLinkAction, {});
+  return (
+    <form action={action} className="row-form">
+      <input type="hidden" name="batchId" value={batchId} />
+      <button className="secondary" disabled={pending}>Get card payment link</button>
+      {s.setupUrl && (
+        <div className="copybox">
+          Send this to ACE to pay by card (credit cards add the 3% fee; debit cards don't): <input readOnly value={s.setupUrl} onFocus={(ev) => ev.currentTarget.select()} />
+        </div>
+      )}
+      {s.error && <span className="form-error">{s.error}</span>}
     </form>
   );
 }

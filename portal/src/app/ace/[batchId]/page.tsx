@@ -7,7 +7,7 @@ import { formatUsd } from "@/lib/money";
 import { fmtDate, todayInTz } from "@/lib/format";
 import { STATUS_LABEL } from "@/domain/clientStatus";
 import { PortalHeader } from "@/app/PortalHeader";
-import { AssignSlotForm, RecordPaymentForm, ResendInvoiceForm } from "../Forms";
+import { AssignSlotForm, CardPayLinkForm, RecordPaymentForm, ResendInvoiceForm } from "../Forms";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +45,13 @@ export default async function BatchPage({ params }: { params: Promise<{ batchId:
             <h3>ACE's invoice wasn't fully sent</h3>
             <p className="muted">Stripe had a problem while sending it. Try again; nothing is duplicated.</p>
             <ResendInvoiceForm batchId={batchId} />
+          </section>
+        )}
+        {!batch.paidAt && batch.stripeInvoiceId && (
+          <section className="panel pad">
+            <h3>ACE paying by card?</h3>
+            <p className="muted">ACE's invoice accepts ACH and bank transfer. To pay by card instead, send ACE this link. Their invoice is reissued for the card (with the 3% fee for credit cards when the card fee is on) and the ACH invoice is cancelled.</p>
+            <CardPayLinkForm batchId={batchId} />
           </section>
         )}
         {!batch.paidAt && (

@@ -8,6 +8,7 @@ import { savePackage } from "@/packages/packages";
 import { createBatch, issueBatchInvoice, recordBatchPayment, setAceCustomer } from "@/ace/batches";
 import { assignSlot } from "@/ace/slots";
 import { markContinuing, markEnded } from "@/ace/continuation";
+import { aceCardPayLink } from "@/ace/cardPay";
 
 export type AceFormResult = { ok?: boolean; error?: string; setupUrl?: string; batchId?: string };
 const cents = (v: FormDataEntryValue | null) => Math.round(Number(String(v ?? "").replace(/[$,]/g, "")) * 100);
@@ -109,4 +110,12 @@ export async function resendInvoiceAction(_: AceFormResult, f: FormData): Promis
   if (!r.ok) return { error: r.error };
   revalidatePath(`/ace/${batchId}`);
   return { ok: true };
+}
+
+export async function cardPayLinkAction(_: AceFormResult, f: FormData): Promise<AceFormResult> {
+  const h = await headers();
+  const base = process.env.PORTAL_BASE_URL ?? `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
+  const r = await aceCardPayLink(str(f.get("batchId")), base);
+  if (!r.ok) return { error: r.error };
+  return { ok: true, setupUrl: r.url };
 }

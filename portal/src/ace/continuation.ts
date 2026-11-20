@@ -1,5 +1,5 @@
 import type Stripe from "stripe";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { signLink, verifyLink } from "@/lib/links";
 import { db } from "@/lib/db";
 import { getStripe } from "@/stripe/client";
 import { ForbiddenError, requirePermission } from "@/auth/permissions";
@@ -33,20 +33,8 @@ export async function dueForContinuation(now: Date = new Date()) {
   return rows.map((c) => ({ clientId: c.id, name: c.name, prepaidUntil: c.acePrepaidUntil!, decision: c.continuationDecision }));
 }
 
-const sign = (clientId: string) =>
-  createHmac("sha256", process.env.AUTH_SECRET ?? "").update(`ace-continue:${clientId}`).digest("base64url");
-
-/** Long-lived link for the client: the portal opens a fresh Stripe setup page each time (Stripe's expire in 24h). */
 export function continuationToken(clientId: string): string {
-  return `${clientId}.${sign(clientId)}`;
-}
-
-function clientIdFromToken(token: string): string | null {
-  const [clientId, mac] = token.split(".");
-  if (!clientId || !mac) return null;
-  const expected = Buffer.from(sign(clientId));
-  const got = Buffer.from(mac);
-  return expected.length === got.length && timingSafeEqual(expected, got) ? clientId : null;
+  return signLink("ace-continue", clientId);
 }
 
 /** The client wants to continue: record it and return the link to send them for setting up autopay. */
@@ -75,7 +63,7 @@ export async function markContinuing(clientId: string, baseUrl: string): Promise
 
 /** Public: the client opened their link. Returns a fresh Stripe setup page, or why the link no longer works. */
 export async function startSetupFromToken(token: string, baseUrl: string): Promise<{ url: string } | { error: string }> {
-  const clientId = clientIdFromToken(token);
+  const clientId = verifyLink("ace-continue", token);
   if (!clientId) return { error: "This link isn't valid. Please use the link Book Clarity sent you." };
   const client = await db.client.findUnique({ where: { id: clientId } });
   if (!client || client.continuationDecision !== "CONTINUING" || client.endedAt || client.stripeSubscriptionId || !client.stripeCustomerId) {

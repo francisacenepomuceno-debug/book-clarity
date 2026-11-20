@@ -60,6 +60,10 @@ export function defaultWebhookDeps(over: Partial<WebhookDeps> = {}): WebhookDeps
       const { onSetupCompleted } = await import("@/ace/continuation");
       await onSetupCompleted(session);
     },
+    onAceCardSetupCompleted: async (session) => {
+      const { onAceCardSetupCompleted } = await import("@/ace/cardPay");
+      await onAceCardSetupCompleted(session);
+    },
     onAceBatchPaid: async (inv) => {
       const { onBatchInvoicePaid } = await import("@/ace/batches");
       await onBatchInvoicePaid(inv);

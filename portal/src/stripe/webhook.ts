@@ -23,6 +23,8 @@ export type WebhookDeps = {
   onAceBatchPaid?: (inv: Stripe.Invoice) => Promise<void>;
   /** An ACE client finished the setup link (checkout.session.completed, ACE_CONTINUATION). */
   onAceSetupCompleted?: (session: Stripe.Checkout.Session) => Promise<void>;
+  /** ACE saved a card to pay a batch (checkout.session.completed, ACE_BATCH_CARD). */
+  onAceCardSetupCompleted?: (session: Stripe.Checkout.Session) => Promise<void>;
 };
 
 /** An unfinished attempt older than this is assumed dead and may be retried. */
@@ -114,6 +116,7 @@ async function dispatch(event: Stripe.Event, deps: WebhookDeps): Promise<void> {
     case "checkout.session.completed": {
       const session = obj as Stripe.Checkout.Session;
       if (session.metadata?.kind === "ACE_CONTINUATION") await deps.onAceSetupCompleted?.(session);
+      if (session.metadata?.kind === "ACE_BATCH_CARD") await deps.onAceCardSetupCompleted?.(session);
       return;
     }
     case "charge.refunded":
