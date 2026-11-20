@@ -32,6 +32,8 @@ export type WebhookDeps = {
   onOnboardingSetupSucceeded?: (si: Stripe.SetupIntent) => Promise<void>;
   onOnboardingFeePaid?: (inv: Stripe.Invoice) => Promise<void>;
   onOnboardingFeeFailed?: (inv: Stripe.Invoice) => Promise<void>;
+  /** A monthly invoice was paid: resume the client if they were suspended. */
+  onSubscriptionInvoicePaid?: (clientId: string) => Promise<void>;
   /** Which Stripe invoice a payment intent pays (for ACH "processing"). */
   getInvoiceIdForPaymentIntent?: (paymentIntentId: string) => Promise<string | null>;
 };
@@ -118,6 +120,7 @@ async function dispatch(event: Stripe.Event, deps: WebhookDeps): Promise<void> {
       if (row?.clientId) await refreshClientStatus(row.clientId);
       if (row) await deps.onInvoicePaid(inv, paid);
       if (inv.metadata?.kind === "ONBOARDING") await deps.onOnboardingFeePaid?.(inv);
+      if (row?.clientId && row.kind === "SUBSCRIPTION") await deps.onSubscriptionInvoicePaid?.(row.clientId);
       return;
     }
     case "invoice.created": {

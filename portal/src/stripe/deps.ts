@@ -89,6 +89,10 @@ export function defaultWebhookDeps(over: Partial<WebhookDeps> = {}): WebhookDeps
       const { onOnboardingFeeFailed } = await import("@/onboarding/payment");
       await onOnboardingFeeFailed(inv);
     },
+    onSubscriptionInvoicePaid: async (clientId) => {
+      const { resumeIfPaidUp } = await import("@/billing/suspension");
+      await resumeIfPaidUp(clientId);
+    },
     onAceBatchPaid: async (inv) => {
       const { onBatchInvoicePaid } = await import("@/ace/batches");
       await onBatchInvoicePaid(inv);

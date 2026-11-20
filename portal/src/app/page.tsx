@@ -15,10 +15,11 @@ const FILTERS: { key: ClientStatus | "ALL"; label: string }[] = [
   { key: "UNPAID", label: STATUS_LABEL.UNPAID },
   { key: "PAST_DUE", label: STATUS_LABEL.PAST_DUE },
   { key: "AT_RISK", label: STATUS_LABEL.AT_RISK },
+  { key: "SUSPENDED", label: STATUS_LABEL.SUSPENDED },
   { key: "PAUSED", label: STATUS_LABEL.PAUSED },
   { key: "PREPAID_ACE", label: STATUS_LABEL.PREPAID_ACE },
 ];
-const ORDER: ClientStatus[] = ["AT_RISK", "PAST_DUE", "UNPAID", "CONTINUING_AWAITING_PM", "PAUSED", "CURRENT", "PREPAID_ACE", "ONBOARDING"];
+const ORDER: ClientStatus[] = ["SUSPENDED", "AT_RISK", "PAST_DUE", "UNPAID", "CONTINUING_AWAITING_PM", "PAUSED", "CURRENT", "PREPAID_ACE", "ONBOARDING"];
 const sum = (rows: ClientRow[], f: (r: ClientRow) => number | undefined) => rows.reduce((n, r) => n + (f(r) ?? 0), 0);
 
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ status?: string; refresh?: string }> }) {

@@ -8,6 +8,7 @@ import { fmtDate } from "@/lib/format";
 import { PortalHeader } from "@/app/PortalHeader";
 import { CommissionSection } from "./CommissionSection";
 import { OnboardingSection } from "./OnboardingSection";
+import { SuspensionSection } from "./SuspensionSection";
 import { refreshClientStatus } from "@/stripe/clientStatusSync";
 
 /** Page for a client that has no Stripe subscription yet (e.g. a new ACE client), addressed by portal id. */
@@ -33,6 +34,7 @@ export async function PortalClientPage({ clientId, viewer }: { clientId: string;
           {client.email && can(viewer.role, "clients.viewFinancials") && <> · {client.email}</>}
         </p>
         {ace && slot && <p><a href={`/ace/${slot.batchId}`}>Open the ACE batch</a></p>}
+        <SuspensionSection clientId={client.id} role={viewer.role} />
         <OnboardingSection clientId={client.id} role={viewer.role} />
         <CommissionSection clientId={client.id} formKey={client.id} role={viewer.role} />
       </main>

@@ -38,7 +38,7 @@ export function scopeRow(r: LiveClientRow, role: Role): ClientRow {
   };
 }
 
-const URGENCY: ClientStatus[] = ["AT_RISK", "PAST_DUE", "UNPAID", "CURRENT", "CONTINUING_AWAITING_PM", "PREPAID_ACE", "ONBOARDING", "PAUSED", "ENDED"];
+const URGENCY: ClientStatus[] = ["SUSPENDED", "AT_RISK", "PAST_DUE", "UNPAID", "CURRENT", "CONTINUING_AWAITING_PM", "PREPAID_ACE", "ONBOARDING", "PAUSED", "ENDED"];
 
 /**
  * Read-only bridge until the Plan 6 import: make sure every live Stripe customer has a portal Client row (create-only),

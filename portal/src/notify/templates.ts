@@ -210,4 +210,31 @@ export const templates = {
       sms: sms(`Book Clarity: you're almost set up! Next step: ${i.step}. Continue here: ${i.url}`),
     };
   },
+
+  serviceSuspended(i: { name: string; amount: string; updateUrl: string }): Message {
+    return {
+      subject: "Your Book Clarity service is on hold",
+      html: html(
+        [
+          `Hi ${esc(firstName(i.name))},`,
+          `Because your payment of <strong>${esc(i.amount)}</strong> is still outstanding, we've put your Book Clarity service on hold.`,
+          `As soon as the payment goes through, your service and monthly billing resume automatically. Paying by bank account (ACH) has no processing fee.`,
+          `If you'd like to talk about it, just reply to this email.`,
+        ],
+        { label: "Update payment method", url: i.updateUrl },
+      ),
+      sms: sms(`Book Clarity: your service is on hold because your ${i.amount} payment is outstanding. Update your payment method to resume: ${i.updateUrl}`),
+    };
+  },
+
+  staffClientSuspended(i: { clientName: string; amount: string; days: number; clientUrl: string }): Message {
+    return {
+      subject: `Suspended: ${i.clientName} (unpaid ${i.days} days)`,
+      html: html(
+        [`<strong>${esc(i.clientName)}</strong> has been suspended: ${esc(i.amount)} has been unpaid for ${i.days} days. Billing is paused; it resumes automatically when they pay, or an Owner can resume them from the client page.`],
+        { label: "Open client", url: i.clientUrl },
+      ),
+      sms: sms(`${i.clientName} was suspended (unpaid ${i.days} days).`),
+    };
+  },
 };

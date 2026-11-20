@@ -16,6 +16,8 @@ export type StatusInput = {
   type: ClientType;
   endedAt: Date | null;
   paused: boolean;
+  /** Collection paused by the portal after N days unpaid (Plan 4B). */
+  suspended?: boolean;
   onboardingComplete: boolean;
   acePrepaidUntil: Date | null;
   continuingAwaitingPm: boolean;
@@ -34,6 +36,7 @@ export function deriveClientStatus(i: StatusInput): ClientStatus {
   if (i.endedAt) return "ENDED";
   if (!i.onboardingComplete) return "ONBOARDING";
   if (i.acePrepaidUntil && i.acePrepaidUntil > i.now) return "PREPAID_ACE";
+  if (i.suspended) return "SUSPENDED";
   if (i.paused) return "PAUSED";
   if (i.continuingAwaitingPm) return "CONTINUING_AWAITING_PM";
   const inv = i.latestInvoice;
