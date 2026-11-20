@@ -19,6 +19,8 @@ export type WebhookDeps = {
   getInvoiceIdForCharge?: (charge: Stripe.Charge) => Promise<string | null>;
   /** Called once per newly seen refund; the commission engine claws back from it. */
   onRefund?: (invoiceRowId: string, refund: RefundInfo) => Promise<void>;
+  /** ACE paid a batch invoice (metadata.kind = ACE_BATCH). */
+  onAceBatchPaid?: (inv: Stripe.Invoice) => Promise<void>;
 };
 
 /** An unfinished attempt older than this is assumed dead and may be retried. */
@@ -80,6 +82,7 @@ async function dispatch(event: Stripe.Event, deps: WebhookDeps): Promise<void> {
     }
     case "invoice.paid": {
       const inv = obj as Stripe.Invoice;
+      if (inv.metadata?.kind === "ACE_BATCH") return deps.onAceBatchPaid?.(inv);
       const paid = await deps.getPaidMethod(inv);
       const row = await upsertInvoiceFromStripe(inv, { paid });
       if (row?.clientId) await refreshClientStatus(row.clientId);
