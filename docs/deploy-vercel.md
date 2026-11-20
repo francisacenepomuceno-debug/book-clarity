@@ -78,6 +78,7 @@ Messages appear in each contact's GHL **Conversations**. The schedule lives in t
    - `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`
    - `customer.updated`
    - `invoice.upcoming`, `charge.refunded`, `checkout.session.completed`
+   - `payment_intent.processing` (bank payments clearing) and `setup_intent.succeeded` (a new client saved their bank account or card during onboarding)
 4. Copy the endpoint's **Signing secret** (it starts `whsec_`) into Vercel as `STRIPE_WEBHOOK_SECRET`, then **Redeploy**.
 5. In Stripe, the endpoint's next deliveries should show **200 OK**.
 

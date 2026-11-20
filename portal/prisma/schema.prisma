@@ -311,6 +311,8 @@ model Onboarding {
   feeInvoiceId       String?
   feeSetupSessionId  String?
   feePaidAt          DateTime?
+  feeSubmittedAt     DateTime?
+  feePaymentMethodId String?
   stripeSubscriptionId String?
   intake             Json?
   intakeAt           DateTime?

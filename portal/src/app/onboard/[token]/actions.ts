@@ -57,3 +57,13 @@ export async function callBookedAction(_: StepResult, f: FormData): Promise<Step
   if (!r.ok) return { error: r.error };
   redirect(`/setup-complete?onboarded=1`);
 }
+
+export async function payAction(f: FormData): Promise<void> {
+  const { startOnboardingPayment } = await import("@/onboarding/payment");
+  const token = str(f, "token");
+  const h = await headers();
+  const base = process.env.PORTAL_BASE_URL ?? `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
+  const r = await startOnboardingPayment(token, f.get("method") === "bank" ? "bank" : "card", base);
+  if ("error" in r) redirect(`/onboard/${token}`);
+  redirect(r.url);
+}

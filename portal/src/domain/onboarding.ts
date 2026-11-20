@@ -15,6 +15,8 @@ type Progress = {
   details: unknown;
   signedAt: Date | null;
   feePaidAt: Date | null;
+  /** Payment sent (e.g. a bank payment still clearing): the client may carry on. */
+  feeSubmittedAt?: Date | null;
   intakeAt: Date | null;
   callBookedAt: Date | null;
   completedAt: Date | null;
@@ -26,7 +28,7 @@ export function nextStep(o: Progress, type: "DIRECT" | "ACE"): OnboardingStep {
   if (type === "DIRECT" && !o.packageId) return "package";
   if (o.details == null) return "details";
   if (!o.signedAt) return "contract";
-  if (type === "DIRECT" && !o.feePaidAt) return "payment";
+  if (type === "DIRECT" && !o.feePaidAt && !o.feeSubmittedAt) return "payment";
   if (!o.intakeAt) return "intake";
   if (!o.callBookedAt) return "call";
   return "done";

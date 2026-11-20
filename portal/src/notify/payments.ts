@@ -43,7 +43,8 @@ export async function onUpcomingInvoice(inv: Stripe.Invoice, now: Date = new Dat
 
 async function sendFailed(invoiceRowId: string, day: 0 | 3 | 7 | 14, now: Date): Promise<void> {
   const inv = await db.invoice.findUnique({ where: { id: invoiceRowId } });
-  if (!inv?.clientId || inv.status !== "open") return;
+  // Monthly charges only; a failed onboarding fee has its own notice (onboarding/payment.ts).
+  if (!inv?.clientId || inv.status !== "open" || inv.kind !== "SUBSCRIPTION") return;
   // A bank (ACH) payment is on its way: don't tell the client they still owe.
   if (inv.processingSince) return;
   const client = await db.client.findUniqueOrThrow({ where: { id: inv.clientId } });

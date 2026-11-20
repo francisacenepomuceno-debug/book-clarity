@@ -77,6 +77,18 @@ export function defaultWebhookDeps(over: Partial<WebhookDeps> = {}): WebhookDeps
       const { onAceCardSetupCompleted } = await import("@/ace/cardPay");
       await onAceCardSetupCompleted(session);
     },
+    onOnboardingSetupSucceeded: async (si) => {
+      const { onOnboardingSetupSucceeded } = await import("@/onboarding/payment");
+      await onOnboardingSetupSucceeded(si);
+    },
+    onOnboardingFeePaid: async (inv) => {
+      const { onOnboardingFeePaid } = await import("@/onboarding/payment");
+      await onOnboardingFeePaid(inv);
+    },
+    onOnboardingFeeFailed: async (inv) => {
+      const { onOnboardingFeeFailed } = await import("@/onboarding/payment");
+      await onOnboardingFeeFailed(inv);
+    },
     onAceBatchPaid: async (inv) => {
       const { onBatchInvoicePaid } = await import("@/ace/batches");
       await onBatchInvoicePaid(inv);

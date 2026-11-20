@@ -28,6 +28,10 @@ export type WebhookDeps = {
   /** Client notices: payment coming up (invoice.upcoming) and payment failed (day 0). */
   onUpcomingInvoice?: (inv: Stripe.Invoice) => Promise<void>;
   onPaymentFailedNotice?: (invoiceRowId: string) => Promise<void>;
+  /** New-client onboarding (Plan 4B): method saved, fee paid, fee failed. */
+  onOnboardingSetupSucceeded?: (si: Stripe.SetupIntent) => Promise<void>;
+  onOnboardingFeePaid?: (inv: Stripe.Invoice) => Promise<void>;
+  onOnboardingFeeFailed?: (inv: Stripe.Invoice) => Promise<void>;
   /** Which Stripe invoice a payment intent pays (for ACH "processing"). */
   getInvoiceIdForPaymentIntent?: (paymentIntentId: string) => Promise<string | null>;
 };
@@ -53,6 +57,7 @@ const HANDLED = new Set([
   "checkout.session.completed",
   "invoice.upcoming",
   "payment_intent.processing",
+  "setup_intent.succeeded",
 ]);
 
 /** Verified events only. Idempotent by event.id; a failed handler un-records the event so Stripe's retry runs. */
@@ -91,6 +96,7 @@ async function dispatch(event: Stripe.Event, deps: WebhookDeps): Promise<void> {
       const row = await upsertInvoiceFromStripe(obj as Stripe.Invoice, { failedNow: true });
       if (row?.clientId) await refreshClientStatus(row.clientId);
       if (row) await deps.onPaymentFailedNotice?.(row.id);
+      if ((obj as Stripe.Invoice).metadata?.kind === "ONBOARDING") await deps.onOnboardingFeeFailed?.(obj as Stripe.Invoice);
       return;
     }
     case "payment_intent.processing": {
@@ -111,6 +117,7 @@ async function dispatch(event: Stripe.Event, deps: WebhookDeps): Promise<void> {
       const row = await upsertInvoiceFromStripe(inv, { paid });
       if (row?.clientId) await refreshClientStatus(row.clientId);
       if (row) await deps.onInvoicePaid(inv, paid);
+      if (inv.metadata?.kind === "ONBOARDING") await deps.onOnboardingFeePaid?.(inv);
       return;
     }
     case "invoice.created": {
@@ -136,6 +143,11 @@ async function dispatch(event: Stripe.Event, deps: WebhookDeps): Promise<void> {
       const session = obj as Stripe.Checkout.Session;
       if (session.metadata?.kind === "ACE_CONTINUATION") await deps.onAceSetupCompleted?.(session);
       if (session.metadata?.kind === "ACE_BATCH_CARD") await deps.onAceCardSetupCompleted?.(session);
+      return;
+    }
+    case "setup_intent.succeeded": {
+      const si = obj as Stripe.SetupIntent;
+      if (si.metadata?.kind === "ONBOARDING_SETUP") await deps.onOnboardingSetupSucceeded?.(si);
       return;
     }
     case "charge.refunded":

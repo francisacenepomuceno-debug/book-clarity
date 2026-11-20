@@ -178,4 +178,15 @@ export const templates = {
       sms: sms(`${i.clientName} signed their agreement. Countersign: ${i.url}`),
     };
   },
+
+  onboardingFeeFailed(i: { name: string; amount: string; url: string }): Message {
+    return {
+      subject: "Your Book Clarity onboarding fee didn't go through",
+      html: html(
+        [`Hi ${esc(firstName(i.name))},`, `Your onboarding fee payment of <strong>${esc(i.amount)}</strong> didn't go through. Please use your onboarding link to pay with another bank account or card.`],
+        { label: "Pay onboarding fee", url: i.url },
+      ),
+      sms: sms(`Book Clarity: your onboarding fee of ${i.amount} didn't go through. Please try again: ${i.url}`),
+    };
+  },
 };
