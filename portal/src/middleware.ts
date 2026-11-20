@@ -1,23 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { SESSION_COOKIE, verifySession } from "@/auth/session";
 
 /**
- * Temporary protection for live financial data until real logins (Plan 1 Task 2).
- * HTTP basic auth, user "bookclarity", password from DASHBOARD_PASSWORD.
- * With no password configured, every request is refused.
+ * First line of defence: any page except login and the Stripe webhook needs a valid session cookie.
+ * Role, 2FA and permission checks happen on the server in requirePermission().
  */
-export function middleware(req: NextRequest) {
-  const password = process.env.DASHBOARD_PASSWORD;
-  if (!password) return new NextResponse("Dashboard is locked: DASHBOARD_PASSWORD is not set.", { status: 503 });
-  const header = req.headers.get("authorization") ?? "";
-  const [scheme, encoded] = header.split(" ");
-  if (scheme === "Basic" && encoded) {
-    const [user, pass] = atob(encoded).split(":");
-    if (user === "bookclarity" && pass === password) return NextResponse.next();
-  }
-  return new NextResponse("Authentication required", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="Book Clarity Portal"' },
-  });
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  if (pathname.startsWith("/login") || pathname.startsWith("/api/stripe/webhook")) return NextResponse.next();
+  const token = req.cookies.get(SESSION_COOKIE)?.value;
+  if (token && (await verifySession(token))) return NextResponse.next();
+  return NextResponse.redirect(new URL("/login", req.url));
 }
 
 export const config = { matcher: "/((?!_next/static|_next/image|favicon.ico).*)" };

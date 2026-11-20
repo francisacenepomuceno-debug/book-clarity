@@ -2,6 +2,8 @@ import { getLiveSnapshot } from "@/stripe/liveSnapshot";
 import { STATUS_LABEL, type ClientStatus } from "@/domain/clientStatus";
 import { formatUsd } from "@/lib/money";
 import type { LiveClientRow } from "@/stripe/mapSubscription";
+import { can, requirePermission } from "@/auth/permissions";
+import { logoutAction } from "@/auth/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,8 @@ const FILTERS: { key: ClientStatus | "ALL"; label: string }[] = [
 const ORDER: ClientStatus[] = ["AT_RISK", "PAST_DUE", "UNPAID", "PAUSED", "CURRENT"];
 
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ status?: string; refresh?: string }> }) {
+  const viewer = await requirePermission("clients.view");
+  const money = can(viewer.role, "clients.viewFinancials");
   const { status = "ALL", refresh } = await searchParams;
 
   let snap;
@@ -53,7 +57,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <h1>Book Clarity · Client Dashboard</h1>
         <small>
           {snap.livemode ? "Live Stripe data" : "Stripe TEST data"} · updated{" "}
-          {snap.fetchedAt.toLocaleTimeString("en-US", { timeZone: TZ })} · <a href={`/?status=${status}&refresh=1`}>Refresh</a>
+          {snap.fetchedAt.toLocaleTimeString("en-US", { timeZone: TZ })} · <a href={`/?status=${status}&refresh=1`}>Refresh</a> ·{" "}
+          {viewer.name}{" "}
+          <form action={logoutAction} style={{ display: "inline" }}>
+            <button className="linklike">Sign out</button>
+          </form>
         </small>
       </header>
       <main>
@@ -64,6 +72,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
               <div className="value">{f.key === "ALL" ? rows.length : count(f.key)}</div>
             </a>
           ))}
+          {money && (<>
           <div className="kpi">
             <div className="label">Monthly package revenue</div>
             <div className="value">{formatUsd(mrr)}</div>
@@ -83,6 +92,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
             <div className="value">{formatUsd(due)}</div>
             <div className="sub">open invoices</div>
           </div>
+          </>)}
         </section>
 
         <section className="panel">
@@ -92,21 +102,21 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 <th>Client</th>
                 <th>Status</th>
                 <th>Package</th>
-                <th className="num">Monthly</th>
-                <th className="num">Card fee</th>
-                <th>Payment method</th>
+                {money && <th className="num">Monthly</th>}
+                {money && <th className="num">Card fee</th>}
+                {money && <th>Payment method</th>}
                 <th>Next charge</th>
-                <th className="num">Amount due</th>
+                {money && <th className="num">Amount due</th>}
                 <th>Past due since</th>
               </tr>
             </thead>
             <tbody>
               {shown.map((r) => (
-                <Row key={r.subscriptionId} r={r} livemode={snap.livemode} />
+                <Row key={r.subscriptionId} r={r} livemode={snap.livemode} money={money} />
               ))}
               {shown.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="muted">No clients in this group.</td>
+                  <td colSpan={money ? 9 : 5} className="muted">No clients in this group.</td>
                 </tr>
               )}
             </tbody>
@@ -121,12 +131,12 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   );
 }
 
-function Row({ r, livemode }: { r: LiveClientRow; livemode: boolean }) {
+function Row({ r, livemode, money }: { r: LiveClientRow; livemode: boolean; money: boolean }) {
   const dash = `https://dashboard.stripe.com/${livemode ? "" : "test/"}subscriptions/${r.subscriptionId}`;
   return (
     <tr>
       <td>
-        <a href={dash} target="_blank" rel="noreferrer">{r.name}</a>
+        {money ? <a href={dash} target="_blank" rel="noreferrer">{r.name}</a> : r.name}
         {r.email && <div className="muted">{r.email}</div>}
       </td>
       <td><span className={`badge s-${r.status}`}>{STATUS_LABEL[r.status]}</span></td>
@@ -135,11 +145,11 @@ function Row({ r, livemode }: { r: LiveClientRow; livemode: boolean }) {
         {r.sixMonthContract && <span className="muted"> · 6-month</span>}
         {r.hasDiscount && <span className="muted"> · discount</span>}
       </td>
-      <td className="num">{formatUsd(r.packageMonthlyCents)}</td>
-      <td className="num">{r.cardFeeMonthlyCents ? formatUsd(r.cardFeeMonthlyCents) : "—"}</td>
-      <td>{r.paymentMethod}</td>
+      {money && <td className="num">{formatUsd(r.packageMonthlyCents)}</td>}
+      {money && <td className="num">{r.cardFeeMonthlyCents ? formatUsd(r.cardFeeMonthlyCents) : "—"}</td>}
+      {money && <td>{r.paymentMethod}</td>}
       <td>{fmtDate(r.nextChargeDate)}</td>
-      <td className="num">{r.amountDueCents ? formatUsd(r.amountDueCents) : "—"}</td>
+      {money && <td className="num">{r.amountDueCents ? formatUsd(r.amountDueCents) : "—"}</td>}
       <td>{fmtDate(r.pastDueSince)}</td>
     </tr>
   );

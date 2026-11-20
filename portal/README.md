@@ -7,12 +7,24 @@ This is the first slice: a **read-only live client dashboard** built from Stripe
 
 1. Copy `.env.example` to `.env.local` and fill it in:
    - `STRIPE_SECRET_KEY`: a **restricted, read-only** Stripe key with Read on Customers, Subscriptions, Invoices, Charges, Payment Methods, Products and Prices.
-   - `DASHBOARD_PASSWORD`: the page is protected by basic auth with user `bookclarity`.
-2. Install and start the dashboard:
+   - `DATABASE_URL`: a Postgres 16 database.
+   - `AUTH_SECRET`: 32 or more random characters, used to sign login sessions.
+   - `STRIPE_WEBHOOK_SECRET`: the signing secret for Stripe webhooks.
+2. Install, set up the database and create the first Super Admin:
 
    ```bash
    npm install
    ```
+
+   ```bash
+   npx prisma migrate deploy
+   ```
+
+   ```bash
+   SEED_SUPER_ADMIN_EMAIL=you@example.com SEED_SUPER_ADMIN_PASSWORD='a-long-password' npx tsx prisma/seed.ts
+   ```
+
+   Then build and start the portal:
 
    ```bash
    npm run build
@@ -22,7 +34,7 @@ This is the first slice: a **read-only live client dashboard** built from Stripe
    npm start
    ```
 
-3. Open http://localhost:3000.
+3. Open http://localhost:3000 and sign in. Owners and Super Admins set up an authenticator app on their first sign-in.
 
 Behind an HTTPS proxy (as in the Claude cloud environment), start with `NODE_USE_ENV_PROXY=1`.
 
@@ -38,7 +50,7 @@ Every non-cancelled Stripe subscription, with:
 
 The portal never writes to Stripe. Data is cached for 60 seconds; use **Refresh** to reload.
 
-**Do not deploy this publicly** until real logins (Plan 1, Task 2) replace the temporary password.
+Admins see the client list without amounts or payment details.
 
 ## Tests
 
