@@ -62,6 +62,8 @@ export async function setClientCommission(
   };
 
   await db.$transaction(async (tx) => {
+    // A second save for the same start date is a correction: it replaces that version instead of adding to it.
+    await tx.commissionShare.deleteMany({ where: { clientId, effectiveFrom: input.effectiveFrom } });
     await tx.commissionShare.createMany({
       data: shares.map((s) => ({ ...s, clientId, effectiveFrom: input.effectiveFrom, createdById: actor.id })),
     });

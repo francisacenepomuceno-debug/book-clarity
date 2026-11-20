@@ -17,20 +17,24 @@ export async function onChargeRefunded(charge: Stripe.Charge, deps: WebhookDeps)
 
   const refunds = charge.refunds?.data ?? [];
   const fresh = refunds.filter((r) => !inv.seenRefundIds.includes(r.id));
-  const pkg = packagePaidCents(inv);
+  // Share is measured against the package paid before any refunds.
+  const pkg = packagePaidCents({ ...inv, refundedPackageCents: 0 });
 
-  await db.invoice.update({
-    where: { id: inv.id },
-    data: { refundedCents: charge.amount_refunded, seenRefundIds: [...inv.seenRefundIds, ...fresh.map((r) => r.id)] },
-  });
+  await db.invoice.update({ where: { id: inv.id }, data: { refundedCents: charge.amount_refunded } });
 
   for (const r of fresh) {
     const retro = r.metadata?.bc_retro_discount === "1" ? Number(r.metadata.discountCents) : NaN;
-    const packageCents = Number.isFinite(retro)
+    const share = Number.isFinite(retro)
       ? retro
       : inv.amountPaidCents > 0
         ? Math.floor((r.amount * pkg * 2 + inv.amountPaidCents) / (2 * inv.amountPaidCents))
         : 0;
-    await deps.onRefund?.(inv.id, { refundKey: r.id, refundCents: r.amount, packageCents: Math.min(packageCents, pkg) });
+    const packageCents = Math.min(share, pkg);
+    // Report first; mark seen only after the clawback succeeded, so a failure is retried by Stripe.
+    await deps.onRefund?.(inv.id, { refundKey: r.id, refundCents: r.amount, packageCents });
+    await db.invoice.update({
+      where: { id: inv.id },
+      data: { seenRefundIds: { push: r.id }, refundedPackageCents: { increment: packageCents } },
+    });
   }
 }

@@ -8,9 +8,18 @@ export type Share = { executiveId: string; rateBp: number; effectiveFrom: Date }
 export type SplitLine = { executiveId: string; rateBp: number };
 export type AmountLine = SplitLine & { amountCents: number };
 
-/** Package amount actually paid on an invoice: excludes the 3% card fee and onboarding fees (spec §9). */
-export function packagePaidCents(i: { amountPaidCents: number; cardFeeCents: number; onboardingCents: number }): number {
-  return Math.max(0, i.amountPaidCents - i.cardFeeCents - i.onboardingCents);
+/**
+ * Package amount actually paid on an invoice (spec §9): excludes the 3% card fee, onboarding fees and taxes,
+ * and the package share of any refunds already recorded.
+ */
+export function packagePaidCents(i: {
+  amountPaidCents: number;
+  cardFeeCents: number;
+  onboardingCents: number;
+  taxCents?: number;
+  refundedPackageCents?: number;
+}): number {
+  return Math.max(0, i.amountPaidCents - i.cardFeeCents - i.onboardingCents - (i.taxCents ?? 0) - (i.refundedPackageCents ?? 0));
 }
 
 /** The split version in force at `at`: all shares with the latest effectiveFrom ≤ at. */

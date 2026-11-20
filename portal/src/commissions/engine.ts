@@ -33,43 +33,62 @@ export async function postingMonthFor(executiveId: string, eventMonth: string, t
 const isEarlier = (a: Invoice, b: Invoice) =>
   a.paidAt!.getTime() < b.paidAt!.getTime() || (a.paidAt!.getTime() === b.paidAt!.getTime() && a.id < b.id);
 
-/** Records commission for one cleared subscription payment. Returns the number of new ledger lines. */
+/**
+ * Records commission for one cleared subscription payment. Returns the number of new ledger lines.
+ * One set of lines per invoice: once an invoice has earned, later split changes never add to it.
+ * Runs under the client's lock so the window (12 paid months) can't be overfilled by concurrent or late payments.
+ */
 export async function recordPaymentCommission(invoiceRowId: string): Promise<number> {
-  const inv = await db.invoice.findUnique({ where: { id: invoiceRowId } });
-  if (!inv?.clientId || inv.kind !== "SUBSCRIPTION" || inv.status !== "paid" || !inv.paidAt) return 0;
-  const client = await db.client.findUniqueOrThrow({ where: { id: inv.clientId } });
+  const first = await db.invoice.findUnique({ where: { id: invoiceRowId }, select: { clientId: true } });
+  if (!first?.clientId) return 0;
+  const clientId = first.clientId;
 
-  const base = packagePaidCents(inv);
-  if (base <= 0) return 0;
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"client:" + clientId}))`;
+    const inv = await tx.invoice.findUnique({ where: { id: invoiceRowId } });
+    if (!inv || inv.kind !== "SUBSCRIPTION" || inv.status !== "paid" || !inv.paidAt) return 0;
+    if (await tx.commissionEntry.count({ where: { invoiceId: inv.id, kind: "EARNED" } })) return 0;
 
-  const shares = await db.commissionShare.findMany({ where: { clientId: client.id } });
-  const split = splitAt(shares, inv.paidAt);
-  if (split.length === 0) return 0;
+    const client = await tx.client.findUniqueOrThrow({ where: { id: clientId } });
+    const base = packagePaidCents(inv);
+    if (base <= 0) return 0;
 
-  // Which paid month this is: months earned before the portal + earlier paid months with a package amount.
-  const paid = await db.invoice.findMany({
-    where: { clientId: client.id, kind: "SUBSCRIPTION", status: "paid", paidAt: { not: null } },
+    const split = splitAt(await tx.commissionShare.findMany({ where: { clientId } }), inv.paidAt);
+    if (split.length === 0) return 0;
+
+    const windowMonths = windowMonthsFor(client);
+    // Hard cap: months earned before the portal + invoices that have already earned.
+    const earnedInvoices = await tx.commissionEntry.findMany({
+      where: { clientId, kind: "EARNED" },
+      distinct: ["invoiceId"],
+      select: { invoiceId: true },
+    });
+    if (client.commissionMonthsBeforePortal + earnedInvoices.length >= windowMonths) return 0;
+
+    // Which paid month this is (chronological): months before the portal + earlier paid months with a package amount.
+    const paid = await tx.invoice.findMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { not: null } } });
+    const earlier = paid.filter((p) => p.id !== inv.id && packagePaidCents(p) > 0 && isEarlier(p, inv)).length;
+    const paidIndex = client.commissionMonthsBeforePortal + earlier + 1;
+
+    const lines = earnedLines({ baseCents: base, paidIndex, windowMonths, split });
+    if (lines.length === 0) return 0;
+
+    return postEntries(
+      tx,
+      monthOf(inv.paidAt, tz()),
+      lines.map((l) => ({
+        executiveId: l.executiveId,
+        clientId,
+        invoiceId: inv.id,
+        kind: "EARNED" as const,
+        windowIndex: paidIndex,
+        baseCents: base,
+        rateBp: l.rateBp,
+        amountCents: l.amountCents,
+        occurredAt: inv.paidAt!,
+      })),
+    );
   });
-  const earlier = paid.filter((p) => p.id !== inv.id && packagePaidCents(p) > 0 && isEarlier(p, inv)).length;
-  const paidIndex = client.commissionMonthsBeforePortal + earlier + 1;
-
-  const lines = earnedLines({ baseCents: base, paidIndex, windowMonths: windowMonthsFor(client), split });
-  if (lines.length === 0) return 0;
-
-  return postEntries(
-    monthOf(inv.paidAt, tz()),
-    lines.map((l) => ({
-      executiveId: l.executiveId,
-      clientId: client.id,
-      invoiceId: inv.id,
-      kind: "EARNED" as const,
-      windowIndex: paidIndex,
-      baseCents: base,
-      rateBp: l.rateBp,
-      amountCents: l.amountCents,
-      occurredAt: inv.paidAt!,
-    })),
-  );
 }
 
 /** Claws back commission for a refund on an invoice, proportionally and at most what was earned. */
@@ -96,7 +115,9 @@ export async function recordRefundClawback(
   if (lines.length === 0) return 0;
 
   const at = refund.at ?? new Date();
-  return postEntries(
+  return db.$transaction((tx) =>
+    postEntries(
+    tx,
     monthOf(at, tz()),
     lines.map((l) => ({
       executiveId: l.executiveId,
@@ -109,18 +130,17 @@ export async function recordRefundClawback(
       amountCents: l.amountCents,
       occurredAt: at,
     })),
+    ),
   );
 }
 
-/** Writes ledger lines, each under its executive's lock so a statement can't be frozen mid-write. Idempotent. */
-async function postEntries(eventMonth: string, lines: Omit<Prisma.CommissionEntryCreateManyInput, "month">[]): Promise<number> {
+/** Writes ledger lines inside `tx`, under each executive's lock so a statement can't be frozen mid-write. Idempotent. */
+async function postEntries(tx: Tx, eventMonth: string, lines: Omit<Prisma.CommissionEntryCreateManyInput, "month">[]): Promise<number> {
   let created = 0;
-  for (const line of lines) {
-    created += await db.$transaction(async (tx) => {
-      await lockExecutive(tx, line.executiveId);
-      const month = await postingMonthFor(line.executiveId, eventMonth, tx);
-      return (await tx.commissionEntry.createMany({ data: [{ ...line, month }], skipDuplicates: true })).count;
-    });
+  for (const line of [...lines].sort((a, b) => a.executiveId.localeCompare(b.executiveId))) {
+    await lockExecutive(tx, line.executiveId);
+    const month = await postingMonthFor(line.executiveId, eventMonth, tx);
+    created += (await tx.commissionEntry.createMany({ data: [{ ...line, month }], skipDuplicates: true })).count;
   }
   return created;
 }
