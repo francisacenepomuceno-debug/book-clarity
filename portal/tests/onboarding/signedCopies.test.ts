@@ -34,11 +34,12 @@ describe("fully signed copies", () => {
   it("go to the client, the countersigner and the office copy address, each once, with a PDF link", async () => {
     const o = await signed();
     expect(await countersign(o.id, now)).toEqual({ ok: true });
-    const notes = await db.notification.findMany({ orderBy: { key: "asc" } });
-    expect(notes.map((n) => [n.key, n.to])).toEqual([
+    // Sorted here, not by the database: text sort order differs between Postgres setups.
+    const notes = (await db.notification.findMany()).map((n) => [n.key, n.to]).sort((a, b) => (a[1]! < b[1]! ? -1 : 1));
+    expect(notes).toEqual([
       [`contract-executed-copy:${o.id}`, "info@book-clarity.com"],
-      [`contract-executed-staff:${o.id}:jose`, "jose@book-clarity.test"],
       [`contract-executed:${o.id}`, "jane@acme.co"],
+      [`contract-executed-staff:${o.id}:jose`, "jose@book-clarity.test"],
     ]);
     const html = (ghl.send.mock.calls.find((c) => (c[0] as { html?: string }).html?.includes("Hi Acme"))![0] as { html: string }).html;
     expect(html).toContain(contractCopyLink(o.id, "https://portal.test"));
