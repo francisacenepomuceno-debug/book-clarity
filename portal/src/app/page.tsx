@@ -48,7 +48,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <PortalHeader showUsersLink={can(viewer.role, "users.manage")} viewerName={viewer.name} livemode={snap.livemode} fetchedAt={snap.fetchedAt} refreshHref={`/?status=${status}&refresh=1`} />
+      <PortalHeader showCommissionsLink={can(viewer.role, "commissions.view")} showUsersLink={can(viewer.role, "users.manage")} viewerName={viewer.name} livemode={snap.livemode} fetchedAt={snap.fetchedAt} refreshHref={`/?status=${status}&refresh=1`} />
       <main>
         <section className="kpis">
           {FILTERS.map((f) => (

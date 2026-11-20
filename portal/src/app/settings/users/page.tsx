@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { requirePermission } from "@/auth/permissions";
+import { can, requirePermission } from "@/auth/permissions";
 import { db } from "@/lib/db";
 import { fmtDate } from "@/lib/format";
 import { PortalHeader } from "@/app/PortalHeader";
@@ -14,7 +14,7 @@ export default async function UsersPage() {
   const loginUrl = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}/login`;
   return (
     <>
-      <PortalHeader viewerName={viewer.name} showUsersLink />
+      <PortalHeader showCommissionsLink={can(viewer.role, "commissions.view")} viewerName={viewer.name} showUsersLink />
       <main>
         <p><a href="/">← All clients</a></p>
         <h2>Users</h2>
