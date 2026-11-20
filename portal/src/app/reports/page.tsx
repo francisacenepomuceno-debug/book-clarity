@@ -1,7 +1,6 @@
 import { requirePermission } from "@/auth/permissions";
 import { parsePeriod, periodOf, previous, type Period, type PeriodKind } from "@/domain/periods";
-import { REPORTS, buildTables } from "@/reports/export";
-import { activeAndMrr } from "@/reports/queries";
+import { REPORTS, buildTables, mrrTrend } from "@/reports/export";
 import { formatUsd } from "@/lib/money";
 import { PortalHeader } from "@/app/PortalHeader";
 import { BarTrend } from "./BarTrend";
@@ -37,14 +36,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const dl = (report: string, format: "csv" | "pdf") => `/api/reports/${report}?period=${period.kind}&key=${period.key}&format=${format}`;
 
   const [sections, trend] = await Promise.all([
-    Promise.all(REPORTS.map(async (r) => ({ ...r, tables: await buildTables(r.key, period) }))),
-    activeAndMrr(period, 12),
+    Promise.all(REPORTS.map(async (r) => ({ ...r, tables: await buildTables(r.key, period, now) }))),
+    mrrTrend(period, now),
   ]);
-  const buckets = (() => {
-    const out = [period];
-    while (out.length < 12) out.unshift(previous(out[0]));
-    return out;
-  })();
 
   return (
     <>
@@ -52,7 +46,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       <main>
         <p><a href="/">← Dashboard</a></p>
         <h2>Reports</h2>
-        <p className="muted">Cash collected, by payment date ({TZ.replace("_", " ")}). Each figure is compared with the previous {kind}. Refunds count against the period of the original payment.</p>
+        <p className="muted">A period still in progress is marked “(so far)”. Cash collected, by payment date ({TZ.replace("_", " ")}). Each figure is compared with the previous {kind}. Refunds count against the period of the original payment.</p>
         <section className="panel pad report-bar">
           <nav className="tabs">
             {KINDS.map((k) => (
@@ -77,8 +71,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             </div>
             {s.key === "active-mrr" && (
               <div className="two-col">
-                <BarTrend title="Active clients" points={trend.map((t, i) => ({ label: t.label, short: shortLabel(buckets[i]), value: t.active, display: String(t.active) }))} />
-                <BarTrend title="Monthly recurring revenue" points={trend.map((t, i) => ({ label: t.label, short: shortLabel(buckets[i]), value: t.mrrCents, display: formatUsd(t.mrrCents) }))} />
+                <BarTrend title="Active clients" points={trend.map((t) => ({ label: t.label, short: shortLabel(t.period), value: t.active, display: String(t.active) }))} />
+                <BarTrend title="Monthly recurring revenue" points={trend.map((t) => ({ label: t.label, short: shortLabel(t.period), value: t.mrrCents, display: formatUsd(t.mrrCents) }))} />
               </div>
             )}
             {s.tables.map((t) => (

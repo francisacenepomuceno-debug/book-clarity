@@ -141,6 +141,33 @@ async function login(browser, email, password, totpSecret) {
     await admin.waitForLoadState("networkidle");
     check("admin cannot open the commissions page", !(await admin.isVisible("text=Unpaid commission")) && (await admin.isVisible("text=isn't available")));
 
+    // Plan 5: reports, exports, payments, audit log, Owner dashboard panels.
+    await owner.goto(`${BASE}/`);
+    await owner.waitForSelector(".kpi", { timeout: 60000 });
+    check("owner dashboard shows this month's collected and alerts", (await owner.isVisible("text=collected so far")) && (await owner.isVisible("text=Needs attention")));
+    await owner.goto(`${BASE}/reports?period=week`);
+    await owner.waitForSelector("h3:has-text('Revenue collected')", { timeout: 60000 });
+    check("owner opens weekly reports", await owner.isVisible("text=Week of"));
+    const csv = await owner.request.get(`${BASE}/api/reports/revenue?period=month&key=2026-11&format=csv`);
+    check("owner downloads a CSV", csv.status() === 200 && (await csv.text()).includes("Monthly packages"));
+    const pdf = await owner.request.get(`${BASE}/api/reports/all?period=month&key=2026-11&format=pdf`);
+    check("owner downloads a PDF", pdf.status() === 200 && (await pdf.body()).subarray(0, 4).toString() === "%PDF");
+    await owner.goto(`${BASE}/audit`);
+    check("owner opens the audit log", await owner.isVisible("h2:has-text('Audit log')"));
+    await admin.goto(`${BASE}/`);
+    await admin.waitForSelector(".kpi", { timeout: 60000 });
+    check("admin dashboard has no owner panels", !(await admin.isVisible("text=collected so far")) && !(await admin.isVisible("text=Needs attention")));
+    await admin.goto(`${BASE}/payments`);
+    await admin.waitForSelector("h2:has-text('Payments')");
+    check("admin opens Payments with no amounts", !(await admin.textContent("main")).includes("$"));
+    await admin.goto(`${BASE}/reports`);
+    await admin.waitForLoadState("networkidle");
+    check("admin cannot open reports", await admin.isVisible("text=isn't available"));
+    check("admin export route is forbidden", (await admin.request.get(`${BASE}/api/reports/revenue?period=month&key=2026-11&format=csv`)).status() === 403);
+    await admin.goto(`${BASE}/audit`);
+    await admin.waitForLoadState("networkidle");
+    check("admin cannot open the audit log", await admin.isVisible("text=isn't available"));
+
     // Plan 4B: a new client, from the start link through signing, then the countersign.
     // Direct clients need a package linked to a Stripe price (local test data only).
     await db.package.updateMany({ where: { name: "Smoke Growth", stripePriceId: null }, data: { stripePriceId: `price_smoke_${Date.now()}` } });

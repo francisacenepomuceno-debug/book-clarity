@@ -1,5 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
-import { change, type Period } from "@/domain/periods";
+import { bucketsBetween, change, periodOf, type Period } from "@/domain/periods";
 import { formatUsd } from "@/lib/money";
 import { fmtDate } from "@/lib/format";
 import { activeAndMrr, aceContinuation, commissionsReport, discountsGiven, endedClients, expectedVsCollected, newClients, revenue, withPrevious } from "@/reports/queries";
@@ -30,13 +30,15 @@ export function fmtChange(cur: number, prev: number, money: boolean): string {
 }
 
 type Line = [label: string, cur: number, prev: number, money: boolean];
-const compare = (title: string, cur: Period, prev: Period, lines: Line[]): Table => ({
+/** A period that hasn't finished yet is labelled "(so far)" so a part-month never reads as a drop. */
+export const periodLabel = (p: Period, now: Date) => (p.end > now ? `${p.label} (so far)` : p.label);
+const compare = (title: string, cur: Period, prev: Period, lines: Line[], now: Date): Table => ({
   title,
-  columns: [title.split(" (")[0], cur.label, prev.label, "Change"],
+  columns: [title.split(" (")[0], periodLabel(cur, now), periodLabel(prev, now), "Change"],
   rows: lines.map(([l, c, p, m]) => [l, m ? formatUsd(c) : String(c), m ? formatUsd(p) : String(p), fmtChange(c, p, m)]),
 });
 
-async function tablesFor(key: Exclude<ReportKey, "all">, p: Period): Promise<Table[]> {
+async function tablesFor(key: Exclude<ReportKey, "all">, p: Period, now: Date): Promise<Table[]> {
   switch (key) {
     case "revenue": {
       const r = await withPrevious(revenue, p);
@@ -54,18 +56,18 @@ async function tablesFor(key: Exclude<ReportKey, "all">, p: Period): Promise<Tab
       const names = [...new Set([...r.current.byPackage, ...r.previous.byPackage].map((x) => x.name))].sort();
       const of = (list: { name: string; cents: number }[], n: string) => list.find((x) => x.name === n)?.cents ?? 0;
       return [
-        compare("Revenue", r.period, r.previousPeriod, lines),
-        compare("Monthly package revenue (by package)", r.period, r.previousPeriod, names.map((n) => [n, of(r.current.byPackage, n), of(r.previous.byPackage, n), true])),
+        compare("Revenue", r.period, r.previousPeriod, lines, now),
+        compare("Monthly package revenue (by package)", r.period, r.previousPeriod, names.map((n) => [n, of(r.current.byPackage, n), of(r.previous.byPackage, n), true]), now),
       ];
     }
     case "expected": {
-      const r = await withPrevious(expectedVsCollected, p);
+      const r = await withPrevious((x) => expectedVsCollected(x), p);
       const pct = (x: { expectedCents: number; collectedCents: number }) => (x.expectedCents ? Math.round((x.collectedCents / x.expectedCents) * 1000) / 10 : 0);
       const t = compare("Expected vs collected", r.period, r.previousPeriod, [
         ["Expected (monthly bills)", r.current.expectedCents, r.previous.expectedCents, true],
         ["Collected", r.current.collectedCents, r.previous.collectedCents, true],
         ["Outstanding past due", r.current.outstandingPastDueCents, r.previous.outstandingPastDueCents, true],
-      ]);
+      ], now);
       t.rows.push(["Collected %", `${pct(r.current)}%`, `${pct(r.previous)}%`, ""]);
       return [t];
     }
@@ -79,7 +81,7 @@ async function tablesFor(key: Exclude<ReportKey, "all">, p: Period): Promise<Tab
           ["Direct", r.current.direct, r.previous.direct, false],
           ["ACE", r.current.ace, r.previous.ace, false],
           ...names.map((n): Line => [`Package: ${n}`, of(r.current.byPackage, n), of(r.previous.byPackage, n), false]),
-        ]),
+        ], now),
         { title: `New clients in ${r.period.label}`, columns: ["Client", "Type", "Package", "Started"], rows: r.current.clients.map((c) => [c.name, c.type === "ACE" ? "ACE" : "Direct", c.packageName, fmtDate(c.date)]) },
       ];
     }
@@ -90,7 +92,7 @@ async function tablesFor(key: Exclude<ReportKey, "all">, p: Period): Promise<Tab
           ["Total", r.current.total, r.previous.total, false],
           ["Direct", r.current.direct, r.previous.direct, false],
           ["ACE", r.current.ace, r.previous.ace, false],
-        ]),
+        ], now),
         { title: `Ended in ${r.period.label}`, columns: ["Client", "Type", "Package", "Ended"], rows: r.current.clients.map((c) => [c.name, c.type === "ACE" ? "ACE" : "Direct", c.packageName, fmtDate(c.date)]) },
       ];
     }
@@ -101,18 +103,18 @@ async function tablesFor(key: Exclude<ReportKey, "all">, p: Period): Promise<Tab
         ["Continued (pay directly)", r.current.continued, r.previous.continued, false],
         ["Ended", r.current.ended, r.previous.ended, false],
         ["Undecided", r.current.undecided, r.previous.undecided, false],
-      ]);
+      ], now);
       t.rows.push(["Continuation rate", rate(r.current), rate(r.previous), ""]);
       return [t, { title: `ACE clients whose prepaid months ended in ${r.period.label}`, columns: ["Client", "Prepaid until", "Outcome"], rows: r.current.clients.map((c) => [c.name, fmtDate(c.prepaidUntil), c.outcome]) }];
     }
     case "active-mrr": {
-      const rows = await activeAndMrr(p, 12);
-      return [{ title: "Active clients and MRR", columns: ["Period", "Active clients", "MRR"], rows: rows.map((r) => [r.label, String(r.active), formatUsd(r.mrrCents)]) }];
+      const rows = await mrrTrend(p, now);
+      return [{ title: "Active clients and MRR (by month)", columns: ["Month", "Active clients", "MRR"], rows: rows.map((r) => [r.label, String(r.active), formatUsd(r.mrrCents)]) }];
     }
     case "discounts": {
       const r = await withPrevious(discountsGiven, p);
       return [
-        compare("Discounts given", r.period, r.previousPeriod, [["Total discounts", r.current.totalCents, r.previous.totalCents, true]]),
+        compare("Discounts given", r.period, r.previousPeriod, [["Total discounts", r.current.totalCents, r.previous.totalCents, true]], now),
         { title: `Discounts by client, ${r.period.label}`, columns: ["Client", "Discount"], rows: r.current.byClient.map((c) => [c.name, formatUsd(c.cents)]) },
       ];
     }
@@ -124,7 +126,7 @@ async function tablesFor(key: Exclude<ReportKey, "all">, p: Period): Promise<Tab
           ["Earned", r.current.totals.earnedCents, r.previous.totals.earnedCents, true],
           ["Clawbacks", r.current.totals.clawbackCents, r.previous.totals.clawbackCents, true],
           ["Net", r.current.totals.netCents, r.previous.totals.netCents, true],
-        ]),
+        ], now),
         {
           title: `Commissions by executive, ${r.period.label}`,
           columns: ["Executive", "Earned", "Clawbacks", "Net", "Paid", "Unpaid"],
@@ -138,9 +140,17 @@ async function tablesFor(key: Exclude<ReportKey, "all">, p: Period): Promise<Tab
   }
 }
 
-export async function buildTables(key: ReportKey, p: Period): Promise<Table[]> {
-  if (key !== "all") return tablesFor(key, p);
-  const all = await Promise.all(REPORTS.map((r) => tablesFor(r.key, p)));
+/** MRR is monthly by nature: the 12 months ending with the selected period (or today, if it's still running). */
+export async function mrrTrend(p: Period, now: Date) {
+  const lastMonth = periodOf("month", new Date(Math.min(p.end.getTime() - 1, now.getTime())), p.tz);
+  const rows = await activeAndMrr(lastMonth, 12);
+  const months = bucketsBetween(lastMonth, 12);
+  return rows.map((r, i) => ({ ...r, label: periodLabel(months[i], now), period: months[i] }));
+}
+
+export async function buildTables(key: ReportKey, p: Period, now: Date = new Date()): Promise<Table[]> {
+  if (key !== "all") return tablesFor(key, p, now);
+  const all = await Promise.all(REPORTS.map((r) => tablesFor(r.key, p, now)));
   return all.flat();
 }
 

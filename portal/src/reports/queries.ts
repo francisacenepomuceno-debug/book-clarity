@@ -37,7 +37,7 @@ export async function revenue(p: Period): Promise<Revenue> {
     t.refundsCents -= i.refundedCents;
     if (i.kind === "SUBSCRIPTION") {
       t.packagesCents += rest;
-      add(pkgs, i.client?.package?.name ?? "No package", rest - i.refundedPackageCents);
+      add(pkgs, i.client?.package?.name ?? "Package not set", rest - i.refundedPackageCents);
     } else {
       t.otherCents += rest;
     }
@@ -47,9 +47,20 @@ export async function revenue(p: Period): Promise<Revenue> {
   return { types: t, byPackage: [...pkgs].map(([name, cents]) => ({ name, cents })).sort(byName) };
 }
 
-export async function expectedVsCollected(p: Period) {
+/** A bill still unpaid this many days after its bill date is past due, even with no recorded failure (e.g. history). */
+export const PAST_DUE_AFTER_DAYS = 3;
+
+export async function expectedVsCollected(p: Period, now: Date = new Date()) {
+  const asOf = new Date(Math.min(p.end.getTime(), now.getTime()));
   const billed = await db.invoice.findMany({ where: { kind: "SUBSCRIPTION", periodStart: inPeriod(p), status: { notIn: ["void", "draft"] } } });
-  const owed = await db.invoice.findMany({ where: { kind: "SUBSCRIPTION", status: { in: ["open", "uncollectible"] }, firstFailedAt: { lt: p.end } } });
+  const owed = await db.invoice.findMany({
+    where: {
+      kind: "SUBSCRIPTION",
+      status: { in: ["open", "uncollectible"] },
+      processingSince: null,
+      OR: [{ firstFailedAt: { lt: asOf } }, { periodStart: { lt: new Date(asOf.getTime() - PAST_DUE_AFTER_DAYS * 86400_000) } }],
+    },
+  });
   return {
     expectedCents: billed.reduce((n, i) => n + i.totalCents, 0),
     collectedCents: billed.reduce((n, i) => n + i.amountPaidCents, 0),
@@ -71,7 +82,7 @@ async function clientStarts(): Promise<ClientLine[]> {
   const out: ClientLine[] = [];
   for (const c of clients) {
     const date = c.onboarding?.feePaidAt ?? slotStart.get(c.id) ?? firstPaid.get(c.id) ?? null;
-    if (date) out.push({ id: c.id, name: c.name, type: c.type, packageName: c.package?.name ?? "No package", date });
+    if (date) out.push({ id: c.id, name: c.name, type: c.type, packageName: c.package?.name ?? "Package not set", date });
   }
   return out;
 }
@@ -93,7 +104,7 @@ export async function newClients(p: Period) {
 
 export async function endedClients(p: Period) {
   const rows = await db.client.findMany({ where: { endedAt: inPeriod(p) }, include: { package: true }, orderBy: { name: "asc" } });
-  const clients: ClientLine[] = rows.map((c) => ({ id: c.id, name: c.name, type: c.type, packageName: c.package?.name ?? "No package", date: c.endedAt! }));
+  const clients: ClientLine[] = rows.map((c) => ({ id: c.id, name: c.name, type: c.type, packageName: c.package?.name ?? "Package not set", date: c.endedAt! }));
   return { total: clients.length, direct: clients.filter((c) => c.type === "DIRECT").length, ace: clients.filter((c) => c.type === "ACE").length, clients };
 }
 

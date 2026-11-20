@@ -59,6 +59,16 @@ describe("expected vs collected", () => {
   });
 });
 
+describe("past due without a recorded failure date (e.g. loaded from history)", () => {
+  it("counts bills still unpaid more than 3 days after their bill date, but not newer ones or bank payments clearing", async () => {
+    const c = await db.client.create({ data: { name: "A" } });
+    await inv(c.id, { status: "open", totalCents: 40000, periodStart: d("2026-11-10T12:00:00Z") });
+    await inv(c.id, { status: "open", totalCents: 7000, periodStart: d("2026-11-29T12:00:00Z") });
+    await inv(c.id, { status: "open", totalCents: 9000, periodStart: d("2026-11-10T12:00:00Z"), processingSince: d("2026-11-11T12:00:00Z") });
+    expect((await expectedVsCollected(nov, d("2026-11-30T12:00:00Z"))).outstandingPastDueCents).toBe(40000);
+  });
+});
+
 describe("clients", () => {
   it("new clients by start date, package and type; ended clients", async () => {
     const g = await db.package.create({ data: { name: "Growth", monthlyPriceCents: 1, onboardingFeeCents: 0 } });
