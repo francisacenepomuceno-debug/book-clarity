@@ -5,6 +5,7 @@ import { ForbiddenError, requirePermission } from "@/auth/permissions";
 import { writeAudit } from "@/audit/log";
 import { refreshClientStatus } from "@/stripe/clientStatusSync";
 import { getOnboardingSettings } from "@/settings/onboarding";
+import { noticesOn } from "@/settings/launch";
 import { sendNotice } from "@/notify/send";
 import { templates } from "@/notify/templates";
 import { baseUrl } from "@/notify/payments";
@@ -20,6 +21,8 @@ const SUSPENDED_META = "bc_suspended";
  * Pauses Stripe collection (invoices during the pause are voided; no late fees) and tells the client and staff.
  */
 export async function runSuspensions(now: Date = new Date(), stripe: Stripe = getStripe()): Promise<number> {
+  // Before launch nobody is told anything, so nobody is suspended either (spec §18 D2).
+  if (!(await noticesOn())) return 0;
   const { suspendAfterDays } = await getOnboardingSettings();
   const due = await db.invoice.findMany({
     where: {

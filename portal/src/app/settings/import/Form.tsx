@@ -11,6 +11,10 @@ export function ImportForm() {
         <input type="hidden" name="step" value="preview" />
         <label>CSV file <input type="file" name="file" accept=".csv,text/csv" /></label>
         <details><summary>…or paste the rows</summary><textarea name="csv" rows={8} style={{ width: "100%", fontFamily: "monospace" }} defaultValue={s.csv ?? ""} /></details>
+        <label>Commission settled outside the portal up to (not including)
+          <input type="date" name="settled" defaultValue={s.settled ?? ""} />
+          <span className="muted" style={{ fontWeight: 400 }}>Usually the first day after the last commission you paid by hand. Payments before this date never earn commission in the portal; your "months already earned" should count those months.</span>
+        </label>
         <label className="check"><input type="checkbox" name="create" defaultChecked={s.create} /> Create executives that aren't in the portal yet</label>
         <button disabled={pending}>Check the file</button>
       </form>
@@ -23,14 +27,18 @@ export function ImportForm() {
           <h3>Ready to apply ({s.ready.length})</h3>
           {s.ready.length > 0 && (
             <table>
-              <thead><tr><th>Line</th><th>Client</th><th>Type</th><th>Commission</th><th>Months already earned</th><th>ACE slot</th></tr></thead>
+              <thead><tr><th>Line</th><th>Client</th><th>Type</th><th>Commission</th><th>Months already earned</th><th>ACE slot</th><th>Commission Apply will post now</th></tr></thead>
               <tbody>
                 {s.ready.map((r) => (
                   <tr key={r.line}>
                     <td>{r.line}</td><td>{r.clientName}</td><td>{r.type ?? "unchanged"}</td>
                     <td>{r.shares.map((x) => `${x.executiveName} ${x.ratePercent}%`).join(" + ") || "unchanged"}{r.newExecutives.length ? ` (new: ${r.newExecutives.join(", ")})` : ""}</td>
                     <td>{r.monthsBeforePortal ?? "unchanged"}</td>
-                    <td>{r.ace ? `from ${r.ace.startOn}` : "—"}</td>
+                    <td>{r.ace ? `from ${r.ace.startOn}${r.ace.historical ? " (historical)" : ""}` : "—"}</td>
+                    <td>
+                      {r.willPost.length ? `${r.willPost.length} month${r.willPost.length === 1 ? "" : "s"}: ${r.willPost.join(", ")}` : "none"}
+                      {r.aceLumpSum && <><br /><strong>+ ACE months 1–6 lump sum</strong> (batch isn't historical)</>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -41,6 +49,8 @@ export function ImportForm() {
               <input type="hidden" name="step" value="apply" />
               <input type="hidden" name="csv" value={s.csv} />
               {s.create && <input type="hidden" name="create" value="on" />}
+              {s.settled && <input type="hidden" name="settled" value={s.settled} />}
+              <p className="muted">Check the last column: any month listed there will appear on this month's commission statements. If a month was already paid by hand, set the "settled up to" date and check again.</p>
               <button disabled={pending}>Apply {s.ready.length} row{s.ready.length === 1 ? "" : "s"}</button>
             </form>
           )}
