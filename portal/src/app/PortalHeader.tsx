@@ -7,9 +7,12 @@ const TZ = process.env.BUSINESS_TZ ?? "America/New_York";
 export function PortalHeader(p: { viewerName: string; role: Role; livemode?: boolean; fetchedAt?: Date; refreshHref?: string }) {
   const links = [
     can(p.role, "onboarding.view") && { href: "/onboarding", label: "Onboarding" },
+    can(p.role, "payments.view") && { href: "/payments", label: "Payments" },
+    can(p.role, "reports.view") && { href: "/reports", label: "Reports" },
     can(p.role, "commissions.view") && { href: "/commissions", label: "Commissions" },
     can(p.role, "ace.manage") && { href: "/ace", label: "ACE" },
     can(p.role, "ace.manage") && { href: "/settings/packages", label: "Packages" },
+    can(p.role, "audit.view") && { href: "/audit", label: "Audit" },
     can(p.role, "users.manage") && { href: "/settings/users", label: "Users" },
   ].filter(Boolean) as { href: string; label: string }[];
   return (

@@ -1,3 +1,4 @@
+import { isCardFeeLine } from "@/stripe/lines";
 import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { getStripe } from "@/stripe/client";
@@ -226,7 +227,7 @@ export async function onBatchInvoicePaid(inv: Stripe.Invoice): Promise<void> {
   const method = await getPaidMethod(inv).catch(() => null);
   const updated = await db.aceBatch.updateMany({
     where: { id: batchId, paidAt: null },
-    data: { paidAt, paidVia: "STRIPE", paymentMethod: method?.type ?? null },
+    data: { paidAt, paidVia: "STRIPE", paymentMethod: method?.type ?? null, cardFeeCents: (inv.lines?.data ?? []).filter(isCardFeeLine).reduce((n, l) => n + l.amount, 0) },
   });
   if (updated.count > 0) {
     await writeAudit({ actorId: null, action: "ace_batch_paid_stripe", entity: "AceBatch", entityId: batchId, after: { paidAt } });

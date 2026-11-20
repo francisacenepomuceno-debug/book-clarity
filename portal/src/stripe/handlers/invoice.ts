@@ -15,12 +15,22 @@ function kindOf(inv: Stripe.Invoice): InvoiceKind {
 const RANK: Record<string, number> = { draft: 0, open: 1, uncollectible: 2, paid: 3, void: 3 };
 const rank = (s: string | null | undefined) => RANK[s ?? "draft"] ?? 0;
 
+/**
+ * When a bill was issued for its service period. Stripe's invoice period_start looks back one cycle
+ * (items that accrued since the last invoice), so use the latest line service period start, else period_end.
+ */
+export function billedAtOf(inv: Stripe.Invoice): Date {
+  const starts = (inv.lines?.data ?? []).map((l) => (l as { period?: { start?: number } }).period?.start).filter((s): s is number => !!s);
+  const t = starts.length ? Math.max(...starts) : inv.period_end ?? inv.created;
+  return fromTs(t) ?? new Date();
+}
+
 export type PaidMethod = { type: "card" | "us_bank_account" | string; funding: string | null; chargeId: string | null };
 
 /** Upserts the portal's copy of a Stripe invoice. Returns null when the customer isn't a known client. */
 export async function upsertInvoiceFromStripe(
   inv: Stripe.Invoice,
-  extra: { failedNow?: boolean; paid?: PaidMethod | null } = {},
+  extra: { failedNow?: boolean; paid?: PaidMethod | null; backfilled?: boolean } = {},
 ): Promise<Invoice | null> {
   const client = await db.client.findUnique({ where: { stripeCustomerId: idOf(inv.customer as string) ?? "" } });
   if (!client) {
@@ -47,6 +57,8 @@ export async function upsertInvoiceFromStripe(
     paidAt: fromTs(inv.status_transitions?.paid_at),
     periodStart: fromTs(inv.period_start) ?? new Date(),
     periodEnd: fromTs(inv.period_end) ?? new Date(),
+    billedAt: billedAtOf(inv),
+    dueAt: fromTs(inv.due_date),
     kind: kindOf(inv),
     ...(extra.paid ? { paymentMethodType: extra.paid.type, cardFunding: extra.paid.funding } : {}),
   };
@@ -62,7 +74,8 @@ export async function upsertInvoiceFromStripe(
 
   return db.invoice.upsert({
     where: { stripeInvoiceId: inv.id! },
-    create: { stripeInvoiceId: inv.id!, ...data, firstFailedAt: firstFailedAt ?? null },
+    // Only a row first created by the history backfill is marked; a webhook-created row never is.
+    create: { stripeInvoiceId: inv.id!, ...data, firstFailedAt: firstFailedAt ?? null, backfilled: extra.backfilled ?? false },
     update: { ...data, ...clearProcessing, ...(firstFailedAt ? { firstFailedAt } : {}) },
   });
 }

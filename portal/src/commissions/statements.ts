@@ -101,7 +101,7 @@ export async function commissionProgress(clientId: string) {
   await requirePermission("commissions.view");
   const client = await db.client.findUniqueOrThrow({ where: { id: clientId } });
   const windowMonths = windowMonthsFor(client);
-  const paid = await db.invoice.findMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { not: null } } });
+  const paid = await db.invoice.findMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { not: null }, backfilled: false } });
   const earnedMonths = Math.min(windowMonths, client.commissionMonthsBeforePortal + paid.filter((p) => packagePaidCents(p) > 0).length);
   const shares = await db.commissionShare.findMany({ where: { clientId } });
   const execs = await db.executive.findMany({ where: { id: { in: shares.map((s) => s.executiveId) } } });
