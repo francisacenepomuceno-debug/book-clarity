@@ -1,4 +1,4 @@
-import type { Invoice } from "@prisma/client";
+import type { Invoice, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import {
   clawbackLines,
@@ -12,9 +12,16 @@ import {
 
 const tz = () => process.env.BUSINESS_TZ ?? "America/New_York";
 
+type Tx = Prisma.TransactionClient;
+
+/** Serialises ledger writes and statement payouts for one executive (transaction-scoped Postgres lock). */
+export async function lockExecutive(tx: Tx, executiveId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${executiveId}))`;
+}
+
 /** The month an entry posts to: its own month, unless that executive already has a paid statement for it or later. */
-export async function postingMonthFor(executiveId: string, eventMonth: string): Promise<string> {
-  const latestPaid = await db.commissionStatement.findFirst({
+export async function postingMonthFor(executiveId: string, eventMonth: string, tx: Tx = db): Promise<string> {
+  const latestPaid = await tx.commissionStatement.findFirst({
     where: { executiveId, status: "PAID" },
     orderBy: { month: "desc" },
     select: { month: true },
@@ -49,9 +56,9 @@ export async function recordPaymentCommission(invoiceRowId: string): Promise<num
   const lines = earnedLines({ baseCents: base, paidIndex, windowMonths: windowMonthsFor(client), split });
   if (lines.length === 0) return 0;
 
-  const eventMonth = monthOf(inv.paidAt, tz());
-  const data = await Promise.all(
-    lines.map(async (l) => ({
+  return postEntries(
+    monthOf(inv.paidAt, tz()),
+    lines.map((l) => ({
       executiveId: l.executiveId,
       clientId: client.id,
       invoiceId: inv.id,
@@ -61,10 +68,8 @@ export async function recordPaymentCommission(invoiceRowId: string): Promise<num
       rateBp: l.rateBp,
       amountCents: l.amountCents,
       occurredAt: inv.paidAt!,
-      month: await postingMonthFor(l.executiveId, eventMonth),
     })),
   );
-  return (await db.commissionEntry.createMany({ data, skipDuplicates: true })).count;
 }
 
 /** Claws back commission for a refund on an invoice, proportionally and at most what was earned. */
@@ -91,9 +96,9 @@ export async function recordRefundClawback(
   if (lines.length === 0) return 0;
 
   const at = refund.at ?? new Date();
-  const eventMonth = monthOf(at, tz());
-  const data = await Promise.all(
-    lines.map(async (l) => ({
+  return postEntries(
+    monthOf(at, tz()),
+    lines.map((l) => ({
       executiveId: l.executiveId,
       clientId: inv.clientId!,
       invoiceId: inv.id,
@@ -103,10 +108,21 @@ export async function recordRefundClawback(
       rateBp: l.rateBp,
       amountCents: l.amountCents,
       occurredAt: at,
-      month: await postingMonthFor(l.executiveId, eventMonth),
     })),
   );
-  return (await db.commissionEntry.createMany({ data, skipDuplicates: true })).count;
+}
+
+/** Writes ledger lines, each under its executive's lock so a statement can't be frozen mid-write. Idempotent. */
+async function postEntries(eventMonth: string, lines: Omit<Prisma.CommissionEntryCreateManyInput, "month">[]): Promise<number> {
+  let created = 0;
+  for (const line of lines) {
+    created += await db.$transaction(async (tx) => {
+      await lockExecutive(tx, line.executiveId);
+      const month = await postingMonthFor(line.executiveId, eventMonth, tx);
+      return (await tx.commissionEntry.createMany({ data: [{ ...line, month }], skipDuplicates: true })).count;
+    });
+  }
+  return created;
 }
 
 /** Re-runs commission for all of a client's paid invoices (idempotent). Used after a split is set or changed. */
