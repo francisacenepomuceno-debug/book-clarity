@@ -263,3 +263,20 @@ model AceSlot {
 
   @@index([batchId, packageId])
 }
+
+/// One row per notice key: sends each notice at most once (retrying a failure once).
+model Notification {
+  id        String    @id @default(cuid())
+  key       String    @unique
+  kind      String
+  clientId  String?
+  to        String?
+  channels  String    @default("")
+  status    String
+  error     String?
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+  sentAt    DateTime?
+
+  @@index([clientId])
+}
