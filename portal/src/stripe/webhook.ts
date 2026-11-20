@@ -16,6 +16,9 @@ export type WebhookDeps = {
   onInvoicePaid: (inv: Stripe.Invoice, paid: PaidMethod | null) => Promise<void>;
 };
 
+/** An unfinished attempt older than this is assumed dead and may be retried. */
+export const STALE_CLAIM_MS = 5 * 60_000;
+
 export type HandleResult = "processed" | "duplicate" | "ignored";
 
 const HANDLED = new Set([
@@ -37,8 +40,13 @@ export async function handleStripeEvent(event: Stripe.Event, deps: WebhookDeps):
   try {
     await db.stripeEvent.create({ data: { id: event.id, type: event.type } });
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return "duplicate";
-    throw e;
+    if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")) throw e;
+    // Seen before. Re-claim it only if an earlier attempt started long ago and never finished (crash/timeout).
+    const claimed = await db.stripeEvent.updateMany({
+      where: { id: event.id, processedAt: null, receivedAt: { lt: new Date(Date.now() - STALE_CLAIM_MS) } },
+      data: { receivedAt: new Date() },
+    });
+    if (claimed.count === 0) return "duplicate";
   }
 
   if (!HANDLED.has(event.type)) {

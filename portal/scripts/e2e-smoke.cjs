@@ -1,7 +1,8 @@
 /**
  * Browser smoke test against a running portal (default http://localhost:3000) with real Stripe data.
- * Read-only: it never submits a discount. Needs DATABASE_URL and SMOKE_SUPERADMIN_PASSWORD for
- * superadmin@bookclarity.local (created by prisma/seed.ts). Creates/updates an Admin test user.
+ * Read-only towards Stripe: it never submits a discount. LOCAL DATABASES ONLY: it reads the test Super Admin's
+ * authenticator secret and creates an Admin test user, so it refuses any non-localhost DATABASE_URL.
+ * Needs SMOKE_SUPERADMIN_PASSWORD for superadmin@bookclarity.local (create it with scripts/create-user.ts).
  *   node scripts/e2e-smoke.cjs
  */
 const { chromium } = require("playwright");
@@ -36,11 +37,16 @@ async function login(browser, email, password, totpSecret) {
 }
 
 (async () => {
+  const host = new URL(process.env.DATABASE_URL ?? "").hostname;
+  if (!["localhost", "127.0.0.1"].includes(host)) {
+    console.error(`Refusing to run against non-local database host "${host}".`);
+    process.exit(2);
+  }
   const db = new PrismaClient();
   const browser = await chromium.launch();
   try {
     // Owner-level (Super Admin)
-    await db.user.update({ where: { email: SA }, data: { totpEnabled: false, totpSecret: null } });
+    await db.user.update({ where: { email: SA }, data: { totpLastStep: null } }); // allow a fresh code each run
     const owner = await login(browser, SA, process.env.SMOKE_SUPERADMIN_PASSWORD, async () => (await db.user.findUnique({ where: { email: SA } })).totpSecret);
     check("super admin sees revenue", await owner.isVisible("text=Monthly package revenue"));
     const rows = await owner.locator("tbody tr").count();

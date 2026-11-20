@@ -11,6 +11,10 @@ function kindOf(inv: Stripe.Invoice): InvoiceKind {
   return k === "ONBOARDING" || k === "ACE_BATCH" ? k : "OTHER";
 }
 
+/** Invoice lifecycle order; events may arrive late, so a row never moves to a lower rank. */
+const RANK: Record<string, number> = { draft: 0, open: 1, uncollectible: 2, paid: 3, void: 3 };
+const rank = (s: string | null | undefined) => RANK[s ?? "draft"] ?? 0;
+
 export type PaidMethod = { type: "card" | "us_bank_account" | string; funding: string | null; chargeId: string | null };
 
 /** Upserts the portal's copy of a Stripe invoice. Returns null when the customer isn't a known client. */
@@ -44,6 +48,10 @@ export async function upsertInvoiceFromStripe(
 
   const existing = await db.invoice.findUnique({ where: { stripeInvoiceId: inv.id! } });
   const firstFailedAt = extra.failedNow && !existing?.firstFailedAt ? new Date() : undefined;
+  if (existing && rank(existing.status) > rank(data.status)) {
+    // Stale event (e.g. invoice.created delivered after invoice.paid): keep the newer state.
+    return firstFailedAt ? db.invoice.update({ where: { id: existing.id }, data: { firstFailedAt } }) : existing;
+  }
 
   return db.invoice.upsert({
     where: { stripeInvoiceId: inv.id! },

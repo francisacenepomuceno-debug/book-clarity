@@ -39,7 +39,7 @@ export function scopeRow(r: LiveClientRow, role: Role): ClientRow {
 const URGENCY: ClientStatus[] = ["AT_RISK", "PAST_DUE", "UNPAID", "CURRENT", "CONTINUING_AWAITING_PM", "PREPAID_ACE", "ONBOARDING", "PAUSED", "ENDED"];
 
 /**
- * Read-only bridge until the Plan 6 import: make sure every live Stripe customer has a portal Client row,
+ * Read-only bridge until the Plan 6 import: make sure every live Stripe customer has a portal Client row (create-only),
  * so webhooks and discounts can find it. Only Stripe-owned fields are written; Direct/ACE etc. are left alone.
  */
 export async function syncClientsFromSnapshot(rows: LiveClientRow[]): Promise<void> {
@@ -49,18 +49,19 @@ export async function syncClientsFromSnapshot(rows: LiveClientRow[]): Promise<vo
     if (!cur || URGENCY.indexOf(r.status) < URGENCY.indexOf(cur.status)) byCustomer.set(r.customerId, r);
   }
   for (const r of byCustomer.values()) {
-    const fields = {
-      name: r.name,
-      email: r.email,
-      stripeSubscriptionId: r.subscriptionId,
-      status: r.status,
-      // Only "paused" matters for status; webhooks store Stripe's exact value.
-      subscriptionStatus: r.status === "PAUSED" ? "paused" : "active",
-    };
+    // Create missing clients only. Status, subscription link and Stripe status belong to the webhooks;
+    // only contact details are refreshed here.
     await db.client.upsert({
       where: { stripeCustomerId: r.customerId },
-      create: { ...fields, stripeCustomerId: r.customerId },
-      update: fields,
+      create: {
+        stripeCustomerId: r.customerId,
+        stripeSubscriptionId: r.subscriptionId,
+        name: r.name,
+        email: r.email,
+        status: r.status,
+        subscriptionStatus: r.status === "PAUSED" ? "paused" : null,
+      },
+      update: { name: r.name, email: r.email },
     });
   }
 }

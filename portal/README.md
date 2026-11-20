@@ -21,8 +21,12 @@ This is the first slice: a **read-only live client dashboard** built from Stripe
    ```
 
    ```bash
-   SEED_SUPER_ADMIN_EMAIL=you@example.com SEED_SUPER_ADMIN_PASSWORD='a-long-password' npx tsx prisma/seed.ts
+   npx tsx scripts/create-user.ts you@example.com "Your Name" SUPER_ADMIN
    ```
+
+   This prints a temporary password and an authenticator setup key once. Add the key to an authenticator app
+   (Google Authenticator, Microsoft Authenticator, 1Password). Use the same script to add Owners (`OWNER`) and
+   Admins (`ADMIN`); Admins don't need an authenticator.
 
    Then build and start the portal:
 
@@ -34,7 +38,9 @@ This is the first slice: a **read-only live client dashboard** built from Stripe
    npm start
    ```
 
-3. Open http://localhost:3000 and sign in. Owners and Super Admins set up an authenticator app on their first sign-in.
+3. Open http://localhost:3000 and sign in. Owners and Super Admins also enter the 6-digit code from their authenticator app.
+
+After 5 wrong passwords or codes, sign-in is locked for 15 minutes.
 
 Behind an HTTPS proxy (as in the Claude cloud environment), start with `NODE_USE_ENV_PROXY=1`.
 

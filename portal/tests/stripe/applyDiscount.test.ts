@@ -13,16 +13,19 @@ vi.mock("@/stripe/client", () => ({ getStripe: () => stripeRef.current }));
 function fakeStripe() {
   return {
     subscriptions: {
-      retrieve: vi.fn(async () => ({
+      retrieve: vi.fn(async function (this: { liveDiscounts: unknown[] }) { return {
         id: "sub_1",
+        discounts: (stripeRef.current as { subscriptions: { liveDiscounts: unknown[] } }).subscriptions.liveDiscounts,
         items: {
           data: [
             { price: { unit_amount: 65000, product: { name: "Growth Package" } }, quantity: 1 },
             { price: { unit_amount: 1950, product: { name: "3% Credit Card Fee" } }, quantity: 1 },
           ],
         },
-      })),
+      }; }),
       update: vi.fn(async () => ({ id: "sub_1" })),
+      // current discounts on the live subscription (may include ones set in the Stripe dashboard)
+      liveDiscounts: [] as unknown[],
     },
     coupons: { create: vi.fn(async (p: { id: string }) => ({ id: p.id })) },
     invoices: { retrieve: vi.fn(async () => ({ id: "in_1" })) },
@@ -31,7 +34,7 @@ function fakeStripe() {
         data: [{ payment: { payment_intent: { latest_charge: { id: "ch_1", payment_method_details: { type: "card", card: { funding: "credit" } } } } } }],
       })),
     },
-    refunds: { create: vi.fn(async () => ({ id: "re_1" })) },
+    refunds: { create: vi.fn(async () => ({ id: `re_${Math.random()}` })) },
   };
 }
 
@@ -53,7 +56,7 @@ describe("applyDiscount", () => {
     expect(r.ok).toBe(true);
     const couponArgs = s().coupons.create.mock.calls[0][0];
     expect(couponArgs).toMatchObject({ percent_off: 20, duration: "repeating", duration_in_months: 3, metadata: { reason: "Jose approved", clientId } });
-    expect(s().subscriptions.update).toHaveBeenCalledWith("sub_1", { discounts: [{ coupon: couponArgs.id }] });
+    expect(s().subscriptions.update).toHaveBeenCalledWith("sub_1", { discounts: [{ coupon: couponArgs.id }] }, { idempotencyKey: `bc-sub-discount-${couponArgs.id}` });
     const rows = await db.discount.findMany({ where: { clientId } });
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ kind: "PERCENT", percentOff: 20, months: 3, createdById: owner.id, replacedAt: null });
@@ -105,7 +108,7 @@ describe("applyRetroactiveDiscount", () => {
       charge: "ch_1",
       amount: 20600,
       metadata: { bc_retro_discount: "1", invoice: "in_1", discountCents: "20000", feeCents: "600", reason: "Make-good" },
-    });
+    }, { idempotencyKey: expect.stringMatching(/^bc-retro-/) });
     expect(await db.auditLog.count({ where: { action: "discount_retroactive" } })).toBe(1);
   });
 
@@ -116,3 +119,51 @@ describe("applyRetroactiveDiscount", () => {
     expect(s().refunds.create).not.toHaveBeenCalled();
   });
 });
+
+describe("review I4/I5: discount safety", () => {
+  it("records discounts set directly in Stripe in the audit 'before'", async () => {
+    s().subscriptions.liveDiscounts = [{ id: "di_dash", source: { coupon: { id: "DASH20", percent_off: 20 } } }];
+    await applyDiscount(clientId, { kind: "PERCENT", percentOff: 10, months: 2, reason: "x" });
+    const audit = await db.auditLog.findFirstOrThrow({ where: { action: "discount_applied" } });
+    expect(audit.before).toMatchObject({ stripeDiscounts: [{ id: "di_dash" }] });
+  });
+
+  it("two simultaneous submissions leave exactly one active discount", async () => {
+    await Promise.all([
+      applyDiscount(clientId, { kind: "PERCENT", percentOff: 10, months: 2, reason: "a" }),
+      applyDiscount(clientId, { kind: "PERCENT", percentOff: 15, months: 2, reason: "b" }),
+    ]);
+    expect(await db.discount.count({ where: { clientId, replacedAt: null } })).toBe(1);
+  });
+
+  it("uses idempotency keys for the Stripe writes", async () => {
+    await applyDiscount(clientId, { kind: "PERCENT", percentOff: 10, months: 2, reason: "x" });
+    expect((s().coupons.create.mock.calls[0] as unknown[])[1]).toMatchObject({ idempotencyKey: expect.stringMatching(/^bc-coupon-/) });
+    expect((s().subscriptions.update.mock.calls[0] as unknown[])[2]).toMatchObject({ idempotencyKey: expect.stringMatching(/^bc-sub-discount-/) });
+  });
+
+  it("rejects a reason over 500 characters before touching Stripe", async () => {
+    const r = await applyDiscount(clientId, { kind: "PERCENT", percentOff: 10, months: 2, reason: "x".repeat(501) });
+    expect(r.ok).toBe(false);
+    expect(s().coupons.create).not.toHaveBeenCalled();
+  });
+
+  it("retroactive discounts on one invoice can't add up to more than the package paid", async () => {
+    await db.invoice.create({
+      data: {
+        stripeInvoiceId: "in_9", clientId, status: "paid", kind: "SUBSCRIPTION",
+        subtotalCents: 80000, totalCents: 80000, amountPaidCents: 80000,
+        periodStart: new Date("2026-11-01"), periodEnd: new Date("2026-12-01"),
+      },
+    });
+    const inv = await db.invoice.findUniqueOrThrow({ where: { stripeInvoiceId: "in_9" } });
+    const [a, b] = await Promise.all([
+      applyRetroactiveDiscount(inv.id, { amountCents: 50000, reason: "first" }),
+      applyRetroactiveDiscount(inv.id, { amountCents: 50000, reason: "second" }),
+    ]);
+    expect([a.ok, b.ok].filter(Boolean)).toHaveLength(1);
+    expect((await applyRetroactiveDiscount(inv.id, { amountCents: 30000, reason: "third" })).ok).toBe(true);
+    expect((await applyRetroactiveDiscount(inv.id, { amountCents: 1, reason: "fourth" })).ok).toBe(false);
+  });
+});
+

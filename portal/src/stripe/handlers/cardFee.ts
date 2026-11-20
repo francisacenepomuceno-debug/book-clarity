@@ -25,11 +25,17 @@ async function defaultPaymentMethod(inv: Stripe.Invoice, stripe: Stripe): Promis
  * Skips invoices that already carry any card-fee line, including legacy "3% Credit Card Fee" subscription items.
  */
 export async function applyCardFeeToDraft(
-  inv: Stripe.Invoice,
+  payload: Stripe.Invoice,
   stripe: Stripe,
 ): Promise<"added" | "skipped_not_draft" | "skipped_exists" | "skipped_rule"> {
-  if (inv.status !== "draft") return "skipped_not_draft";
-  if ((inv.lines?.data ?? []).some(isCardFeeLine)) return "skipped_exists";
+  if (payload.status !== "draft") return "skipped_not_draft";
+  // The event payload is a snapshot; decide from the invoice as it is now (retries, late deliveries).
+  const inv = await stripe.invoices.retrieve(payload.id!);
+  if (inv.status !== "draft") return skip(inv.id!, "skipped_not_draft", `invoice is ${inv.status}`);
+  const lines = inv.lines?.has_more
+    ? await stripe.invoices.listLineItems(inv.id!, { limit: 100 }).autoPagingToArray({ limit: 1000 })
+    : inv.lines?.data ?? [];
+  if (lines.some(isCardFeeLine)) return "skipped_exists";
   if (!SUBSCRIPTION_REASONS.has(inv.billing_reason ?? "")) return "skipped_rule";
 
   const settings = await getFeeSettings();
@@ -46,15 +52,25 @@ export async function applyCardFeeToDraft(
   });
   if (decision.feeCents === 0) return "skipped_rule";
 
-  await stripe.invoiceItems.create({
-    customer: idOf(inv.customer as string)!,
-    invoice: inv.id!,
-    amount: decision.feeCents,
-    currency: inv.currency ?? "usd",
-    description: CARD_FEE_DESCRIPTION,
-    discountable: false,
-    metadata: { [CARD_FEE_METADATA_KEY]: "1" },
-  });
+  try {
+    await stripe.invoiceItems.create(
+      {
+        customer: idOf(inv.customer as string)!,
+        invoice: inv.id!,
+        amount: decision.feeCents,
+        currency: inv.currency ?? "usd",
+        description: CARD_FEE_DESCRIPTION,
+        discountable: false,
+        metadata: { [CARD_FEE_METADATA_KEY]: "1" },
+      },
+      { idempotencyKey: `bc-card-fee-${inv.id}` },
+    );
+  } catch (e) {
+    if ((e as { type?: string }).type === "StripeInvalidRequestError") {
+      return skip(inv.id!, "skipped_not_draft", (e as Error).message);
+    }
+    throw e;
+  }
   await writeAudit({
     actorId: null,
     action: "card_fee_added",
@@ -63,6 +79,12 @@ export async function applyCardFeeToDraft(
     after: { feeCents: decision.feeCents, baseCents: inv.subtotal - discounts },
   });
   return "added";
+}
+
+async function skip<T extends string>(invoiceId: string, result: T, why: string): Promise<T> {
+  console.info(`[card-fee] ${invoiceId}: ${result} (${why})`);
+  await writeAudit({ actorId: null, action: "card_fee_skipped", entity: "Invoice", entityId: invoiceId, after: { result, why } });
+  return result;
 }
 
 /**

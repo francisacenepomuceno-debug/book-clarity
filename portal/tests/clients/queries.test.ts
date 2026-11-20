@@ -40,12 +40,12 @@ describe("scopeRow", () => {
 describe("syncClientsFromSnapshot", () => {
   beforeEach(resetDb);
 
-  it("creates and then updates client rows by Stripe customer", async () => {
+  it("creates client rows by Stripe customer, then refreshes only contact details", async () => {
     await syncClientsFromSnapshot([row()]);
     await syncClientsFromSnapshot([row({ name: "Acme Renamed", status: "CURRENT" })]);
     const all = await db.client.findMany();
     expect(all).toHaveLength(1);
-    expect(all[0]).toMatchObject({ name: "Acme Renamed", stripeCustomerId: "cus_1", stripeSubscriptionId: "sub_1", status: "CURRENT" });
+    expect(all[0]).toMatchObject({ name: "Acme Renamed", stripeCustomerId: "cus_1", stripeSubscriptionId: "sub_1", status: "PAST_DUE" });
   });
 
   it("links only one subscription per customer (prefers the most urgent)", async () => {

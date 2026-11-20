@@ -50,6 +50,7 @@ model User {
   passwordHash String?
   totpSecret   String?
   totpEnabled  Boolean  @default(false)
+  totpLastStep Int?
   createdAt    DateTime @default(now())
 }
 

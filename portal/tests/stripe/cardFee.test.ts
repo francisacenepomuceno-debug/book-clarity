@@ -13,6 +13,8 @@ function fakeStripe(pm: { type: string; card?: { funding: string } } | null, sta
     subscriptions: { retrieve: vi.fn(async () => ({ id: "sub_1", default_payment_method: pm ? { id: "pm_1", ...pm } : null })) },
     customers: { retrieve: vi.fn(async () => ({ id: "cus_1", address: { state }, invoice_settings: { default_payment_method: null } })) },
     invoiceItems: { create: vi.fn(async () => ({ id: "ii_1" })) },
+    // By default the live invoice equals the event payload; tests override to simulate staleness.
+    invoices: { retrieve: vi.fn(async (id: string) => ({ ...(liveInvoices.get(id) as object) })) },
     refunds: { list: vi.fn(async () => ({ data: [] as unknown[] })), create: vi.fn(async () => ({ id: "re_1" })) },
   } as unknown as Stripe & {
     invoiceItems: { create: ReturnType<typeof vi.fn> };
@@ -20,8 +22,12 @@ function fakeStripe(pm: { type: string; card?: { funding: string } } | null, sta
   };
 }
 
-const draft = (over: Record<string, unknown> = {}) =>
-  invoice({ status: "draft", subtotal: 100000, total_discount_amounts: [{ amount: 20000, discount: "di_1" }], ...over });
+const liveInvoices = new Map<string, unknown>();
+const draft = (over: Record<string, unknown> = {}) => {
+  const inv = invoice({ status: "draft", subtotal: 100000, total_discount_amounts: [{ amount: 20000, discount: "di_1" }], ...over });
+  liveInvoices.set(inv.id!, inv);
+  return inv;
+};
 
 beforeEach(async () => {
   await resetDb();
@@ -43,6 +49,7 @@ describe("applyCardFeeToDraft", () => {
         discountable: false,
         metadata: { bc_card_fee: "1" },
       }),
+      { idempotencyKey: "bc-card-fee-in_1" },
     );
     expect(await db.auditLog.count({ where: { action: "card_fee_added" } })).toBe(1);
   });
@@ -142,3 +149,29 @@ describe("reconcileCardFee", () => {
     expect(await reconcileCardFee(withFee(), null, s)).toBe("ok");
   });
 });
+
+describe("applyCardFeeToDraft: stale or retried events (review C1/I2)", () => {
+  it("re-reads the invoice: a retry whose payload predates the fee line adds nothing", async () => {
+    const s = fakeStripe({ type: "card", card: { funding: "credit" } });
+    const stale = draft();
+    liveInvoices.set("in_1", { ...stale, lines: { data: [{ id: "il_f", amount: 2400, description: CARD_FEE_DESCRIPTION, metadata: { bc_card_fee: "1" } }], has_more: false } });
+    expect(await applyCardFeeToDraft(stale, s)).toBe("skipped_exists");
+    expect(s.invoiceItems.create).not.toHaveBeenCalled();
+  });
+
+  it("re-reads the invoice: a late invoice.created for an invoice already paid is skipped, not thrown", async () => {
+    const s = fakeStripe({ type: "card", card: { funding: "credit" } });
+    const stale = draft();
+    liveInvoices.set("in_1", { ...stale, status: "paid" });
+    expect(await applyCardFeeToDraft(stale, s)).toBe("skipped_not_draft");
+    expect(s.invoiceItems.create).not.toHaveBeenCalled();
+  });
+
+  it("Stripe refusing the item (invoice finalised meanwhile) is a logged skip, not an exception", async () => {
+    const s = fakeStripe({ type: "card", card: { funding: "credit" } });
+    s.invoiceItems.create.mockRejectedValueOnce(Object.assign(new Error("Invoice is not editable"), { type: "StripeInvalidRequestError" }));
+    expect(await applyCardFeeToDraft(draft(), s)).toBe("skipped_not_draft");
+    expect(await db.auditLog.count({ where: { action: "card_fee_skipped" } })).toBe(1);
+  });
+});
+
