@@ -11,7 +11,8 @@ export async function refreshClientStatus(clientId: string, now: Date = new Date
   });
   const status = deriveClientStatus({
     type: c.type,
-    endedAt: c.endedAt,
+    // An end date in the future (an ACE client who won't continue) takes effect when it arrives.
+    endedAt: c.endedAt && c.endedAt <= now ? c.endedAt : null,
     paused: c.subscriptionStatus === "paused",
     // ACE clients are onboarded on their slot start date; others once they have a subscription (until Plan 4).
     onboardingComplete: c.stripeSubscriptionId !== null || c.aceSlotId !== null || c.status !== "ONBOARDING",

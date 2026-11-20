@@ -72,10 +72,10 @@ describe("invoice sync", () => {
   });
 
   it("subscription deleted ends the client", async () => {
-    await handleStripeEvent(event("customer.subscription.deleted", { id: "sub_1", customer: "cus_1", status: "canceled", ended_at: ts("2026-12-10") }), deps());
+    await handleStripeEvent(event("customer.subscription.deleted", { id: "sub_1", customer: "cus_1", status: "canceled", ended_at: ts("2026-11-10") }), deps());
     const c = await client();
     expect(c.status).toBe("ENDED");
-    expect(c.endedAt?.toISOString().slice(0, 10)).toBe("2026-12-10");
+    expect(c.endedAt?.toISOString().slice(0, 10)).toBe("2026-11-10");
   });
 
   it("subscription paused marks Paused", async () => {
