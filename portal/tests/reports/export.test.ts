@@ -14,8 +14,8 @@ beforeEach(async () => { await resetDb(); as("OWNER"); });
 
 describe("CSV", () => {
   it("quotes cells and guards formula-looking text", () => {
-    const csv = toCsv([{ title: "T", columns: ["Name", "Amount"], rows: [["Acme, \"Inc\"", "$1.00"], ["=HYPERLINK(1)", "-5"], ["@x", "+1"]] }]);
-    expect(csv).toBe('"T"\r\n"Name","Amount"\r\n"Acme, ""Inc""","$1.00"\r\n"\'=HYPERLINK(1)","\'-5"\r\n"\'@x","\'+1"\r\n');
+    const csv = toCsv([{ title: "T", columns: ["Name", "Amount"], rows: [["Acme, \"Inc\"", "$1.00"], ["=HYPERLINK(1)", "-5x"], ["@x", "+1"]] }]);
+    expect(csv).toBe('"T"\r\n"Name","Amount"\r\n"Acme, ""Inc""","$1.00"\r\n"\'=HYPERLINK(1)","\'-5x"\r\n"\'@x","\'+1"\r\n');
   });
 });
 

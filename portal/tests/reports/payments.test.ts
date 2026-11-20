@@ -6,7 +6,7 @@ import { resetDb } from "../helpers/db";
 const d = (s: string) => new Date(s);
 let n = 0;
 const inv = (clientId: string, o: Record<string, unknown>) =>
-  db.invoice.create({ data: { stripeInvoiceId: `in_${++n}`, clientId, status: "paid", kind: "SUBSCRIPTION", subtotalCents: 65000, totalCents: 65000, periodStart: d("2026-11-05T12:00:00Z"), periodEnd: d("2026-12-05T12:00:00Z"), ...o } });
+  db.invoice.create({ data: { stripeInvoiceId: `in_${++n}`, clientId, status: "paid", kind: "SUBSCRIPTION", subtotalCents: 65000, totalCents: 65000, periodStart: d("2026-11-05T12:00:00Z"), periodEnd: d("2026-12-05T12:00:00Z"), billedAt: (o.billedAt ?? o.periodStart ?? d("2026-11-05T12:00:00Z")) as Date, ...o } });
 
 beforeEach(async () => { await resetDb(); n = 0; });
 

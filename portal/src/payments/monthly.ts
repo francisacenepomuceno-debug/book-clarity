@@ -34,9 +34,9 @@ export async function monthlyPayments(monthKey: string, role: Role) {
   const amounts = can(role, "payments.viewAmounts");
   const [invoices, aceClients, slots] = await Promise.all([
     db.invoice.findMany({
-      where: { kind: "SUBSCRIPTION", status: { notIn: ["void", "draft"] }, periodStart: { gte: month.start, lt: month.end }, clientId: { not: null } },
+      where: { kind: "SUBSCRIPTION", status: { notIn: ["void", "draft"] }, billedAt: { gte: month.start, lt: month.end }, clientId: { not: null } },
       include: { client: true },
-      orderBy: { periodStart: "asc" },
+      orderBy: { billedAt: "asc" },
     }),
     db.client.findMany({ where: { type: "ACE", acePrepaidUntil: { gte: month.start }, OR: [{ endedAt: null }, { endedAt: { gte: month.start } }] } }),
     db.aceSlot.findMany({ where: { clientId: { not: null } } }),
@@ -58,7 +58,7 @@ export async function monthlyPayments(monthKey: string, role: Role) {
       href: `/clients/${c.stripeSubscriptionId ?? c.id}`,
       type: c.type,
       status,
-      date: status === "PAID" ? i.paidAt : status === "PROCESSING" ? i.processingSince : status === "OPEN" ? i.periodStart : i.firstFailedAt,
+      date: status === "PAID" ? i.paidAt : status === "PROCESSING" ? i.processingSince : status === "OPEN" ? i.billedAt : i.firstFailedAt,
     };
     rows.push(amounts ? { ...base, amountCents: i.totalCents, method: methodLabel(i.paymentMethodType, i.cardFunding) } : base);
   }

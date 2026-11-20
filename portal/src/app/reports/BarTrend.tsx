@@ -25,7 +25,7 @@ export function BarTrend(p: { title: string; points: { label: string; short: str
             </g>
           );
         })}
-        {last && <text x={L + slot * (n - 1) + slot / 2 + bw / 2} y={Math.max(12, y(last.value) - 6)} textAnchor="end" className="trend-value">{last.display}</text>}
+        {last && <text x={W - R} y={12} textAnchor="end" className="trend-value">{`${last.short}: ${last.display}`}</text>}
       </svg>
     </figure>
   );

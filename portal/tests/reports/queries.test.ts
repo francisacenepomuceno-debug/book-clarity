@@ -11,7 +11,8 @@ const d = (s: string) => new Date(s);
 let n = 0;
 async function inv(clientId: string | null, o: Record<string, unknown>) {
   return db.invoice.create({
-    data: { stripeInvoiceId: `in_${++n}`, clientId, status: "paid", kind: "SUBSCRIPTION", subtotalCents: 0, totalCents: 0, periodStart: d("2026-11-05T12:00:00Z"), periodEnd: d("2026-12-05T12:00:00Z"), ...o },
+    // billedAt (the bill date) follows periodStart in these fixtures unless given.
+    data: { stripeInvoiceId: `in_${++n}`, clientId, status: "paid", kind: "SUBSCRIPTION", subtotalCents: 0, totalCents: 0, periodStart: d("2026-11-05T12:00:00Z"), periodEnd: d("2026-12-05T12:00:00Z"), billedAt: (o.billedAt ?? o.periodStart ?? d("2026-11-05T12:00:00Z")) as Date, ...o },
   });
 }
 

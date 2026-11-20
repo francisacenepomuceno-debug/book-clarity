@@ -46,7 +46,8 @@ export async function recordPaymentCommission(invoiceRowId: string): Promise<num
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"client:" + clientId}))`;
     const inv = await tx.invoice.findUnique({ where: { id: invoiceRowId } });
-    if (!inv || inv.kind !== "SUBSCRIPTION" || inv.status !== "paid" || !inv.paidAt) return 0;
+    // History copied in by the backfill is already covered by "months before the portal".
+    if (!inv || inv.backfilled || inv.kind !== "SUBSCRIPTION" || inv.status !== "paid" || !inv.paidAt) return 0;
     if (await tx.commissionEntry.count({ where: { invoiceId: inv.id, kind: "EARNED" } })) return 0;
 
     const client = await tx.client.findUniqueOrThrow({ where: { id: clientId } });
@@ -66,7 +67,7 @@ export async function recordPaymentCommission(invoiceRowId: string): Promise<num
     if (client.commissionMonthsBeforePortal + earnedInvoices.length >= windowMonths) return 0;
 
     // Which paid month this is (chronological): months before the portal + earlier paid months with a package amount.
-    const paid = await tx.invoice.findMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { not: null } } });
+    const paid = await tx.invoice.findMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { not: null }, backfilled: false } });
     const earlier = paid.filter((p) => p.id !== inv.id && packagePaidCents(p) > 0 && isEarlier(p, inv)).length;
     const paidIndex = client.commissionMonthsBeforePortal + earlier + 1;
 

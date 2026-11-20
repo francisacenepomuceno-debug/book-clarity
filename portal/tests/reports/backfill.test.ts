@@ -17,10 +17,10 @@ describe("invoice history backfill (read-only)", () => {
     const list = vi.fn(async (p: { starting_after?: string }) => (p.starting_after ? pages[1] : pages[0]));
     const paymentsList = vi.fn(async () => ({ data: [{ payment: { charge: { id: "ch_1", payment_method_details: { type: "card", card: { funding: "credit" } } } } }] }));
     // Only read methods exist on this fake: any write would throw.
-    const stripe = { invoices: { list }, invoicePayments: { list: paymentsList } } as unknown as Stripe;
+    const stripe = { invoices: { list }, invoicePayments: { list: paymentsList }, subscriptions: { list: vi.fn(async () => ({ data: [], has_more: false })) } } as unknown as Stripe;
 
     const first = await backfillInvoices(stripe, new Date("2025-01-01T00:00:00Z"));
-    expect(first).toEqual({ seen: 4, stored: 3, skipped: 1 });
+    expect(first).toEqual({ seen: 4, stored: 3, skipped: 1, clientsAdded: 0 });
     expect(list.mock.calls[0][0]).toMatchObject({ limit: 100, created: { gte: Math.floor(new Date("2025-01-01T00:00:00Z").getTime() / 1000) } });
     expect(list.mock.calls[1][0]).toMatchObject({ starting_after: "in_b" });
     const rows = await db.invoice.findMany({ orderBy: { stripeInvoiceId: "asc" } });

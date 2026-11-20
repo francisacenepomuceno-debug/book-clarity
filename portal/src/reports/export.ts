@@ -66,7 +66,7 @@ async function tablesFor(key: Exclude<ReportKey, "all">, p: Period, now: Date): 
       const t = compare("Expected vs collected", r.period, r.previousPeriod, [
         ["Expected (monthly bills)", r.current.expectedCents, r.previous.expectedCents, true],
         ["Collected", r.current.collectedCents, r.previous.collectedCents, true],
-        ["Outstanding past due", r.current.outstandingPastDueCents, r.previous.outstandingPastDueCents, true],
+        ["Outstanding past due (today's statuses)", r.current.outstandingPastDueCents, r.previous.outstandingPastDueCents, true],
       ], now);
       t.rows.push(["Collected %", `${pct(r.current)}%`, `${pct(r.previous)}%`, ""]);
       return [t];
@@ -157,7 +157,10 @@ export async function buildTables(key: ReportKey, p: Period, now: Date = new Dat
 /** RFC 4180 CSV. Cells that a spreadsheet would run as a formula get a leading apostrophe. */
 export function toCsv(tables: Table[]): string {
   const cell = (v: string) => {
-    const safe = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
+    // Plain amounts like "-$100.00" or "-12.5%" stay numbers; anything else a spreadsheet could run gets an apostrophe.
+    const norm = v.replace(/^−/, "-");
+    const numeric = /^-?\$?[\d,]+(\.\d+)?%?$/.test(norm);
+    const safe = !numeric && /^[=+\-@\t\r]/.test(norm) ? `'${norm}` : norm;
     return `"${safe.replace(/"/g, '""')}"`;
   };
   const lines: string[] = [];

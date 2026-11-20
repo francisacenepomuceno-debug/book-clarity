@@ -95,6 +95,8 @@ model Client {
   aceSetupSessionId     String?
   suspendedAt           DateTime?
   suspensionWaivedAt    DateTime?
+  /** When the client started with Book Clarity (Stripe subscription start), for reports. */
+  startedAt             DateTime?
   onboarding            Onboarding?
   createdAt             DateTime     @default(now())
   endedAt               DateTime?
@@ -125,7 +127,16 @@ model Invoice {
   firstFailedAt     DateTime?
   periodStart       DateTime
   periodEnd         DateTime
+  /** When the bill was issued for its service period (Stripe's period_start looks back a cycle). */
+  billedAt          DateTime    @default(now())
+  /** Emailed invoices: the date payment is due. */
+  dueAt             DateTime?
+  /** Copied from Stripe history by the backfill: never earns commission or counts toward its window. */
+  backfilled        Boolean     @default(false)
   kind              InvoiceKind
+
+  @@index([paidAt])
+  @@index([billedAt])
 }
 
 model Discount {
@@ -159,6 +170,9 @@ model AuditLog {
   before   Json?
   after    Json?
   at       DateTime @default(now())
+
+  @@index([at, id])
+  @@index([action, at])
 }
 
 model Setting {
@@ -248,6 +262,8 @@ model AceBatch {
   paidVia          AcePayment?
   paymentMethod    String?
   paymentReference String?
+  /** 3% fee ACE paid on top when paying a batch by credit card. */
+  cardFeeCents     Int         @default(0)
   createdById      String
   createdAt        DateTime    @default(now())
 }

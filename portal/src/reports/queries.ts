@@ -24,7 +24,7 @@ export type Revenue = {
 
 export async function revenue(p: Period): Promise<Revenue> {
   const [invoices, batches] = await Promise.all([
-    db.invoice.findMany({ where: { status: "paid", paidAt: inPeriod(p) }, include: { client: { include: { package: true } } } }),
+    db.invoice.findMany({ where: { status: "paid", paidAt: inPeriod(p), kind: { not: "ACE_BATCH" } }, include: { client: { include: { package: true } } } }),
     db.aceBatch.findMany({ where: { paidAt: inPeriod(p) } }),
   ]);
   const t = { packagesCents: 0, onboardingCents: 0, cardFeesCents: 0, aceCents: 0, otherCents: 0, taxCents: 0, refundsCents: 0, totalCents: 0 };
@@ -43,22 +43,33 @@ export async function revenue(p: Period): Promise<Revenue> {
     }
   }
   t.aceCents = batches.reduce((n, b) => n + b.totalCents, 0);
+  t.cardFeesCents += batches.reduce((n, b) => n + b.cardFeeCents, 0);
   t.totalCents = t.packagesCents + t.onboardingCents + t.cardFeesCents + t.aceCents + t.otherCents + t.taxCents + t.refundsCents;
   return { types: t, byPackage: [...pkgs].map(([name, cents]) => ({ name, cents })).sort(byName) };
 }
 
-/** A bill still unpaid this many days after its bill date is past due, even with no recorded failure (e.g. history). */
+/** An autopay bill still unpaid this many days after its bill date is past due, even with no recorded failure (e.g. history). */
 export const PAST_DUE_AFTER_DAYS = 3;
 
+/**
+ * Bills issued in the period (by bill date) and what was paid on them; plus what's past due now.
+ * Past due uses today's invoice statuses (it isn't reconstructed for past periods) and leaves out clients who have left.
+ */
 export async function expectedVsCollected(p: Period, now: Date = new Date()) {
   const asOf = new Date(Math.min(p.end.getTime(), now.getTime()));
-  const billed = await db.invoice.findMany({ where: { kind: "SUBSCRIPTION", periodStart: inPeriod(p), status: { notIn: ["void", "draft"] } } });
+  const graceStart = new Date(asOf.getTime() - PAST_DUE_AFTER_DAYS * 86400_000);
+  const billed = await db.invoice.findMany({ where: { kind: "SUBSCRIPTION", billedAt: inPeriod(p), status: { notIn: ["void", "draft"] } } });
   const owed = await db.invoice.findMany({
     where: {
       kind: "SUBSCRIPTION",
       status: { in: ["open", "uncollectible"] },
       processingSince: null,
-      OR: [{ firstFailedAt: { lt: asOf } }, { periodStart: { lt: new Date(asOf.getTime() - PAST_DUE_AFTER_DAYS * 86400_000) } }],
+      client: { endedAt: null },
+      OR: [
+        { firstFailedAt: { lt: asOf } },
+        { dueAt: { lt: asOf } },
+        { dueAt: null, billedAt: { lt: graceStart } },
+      ],
     },
   });
   return {
@@ -70,7 +81,7 @@ export async function expectedVsCollected(p: Period, now: Date = new Date()) {
 
 type ClientLine = { id: string; name: string; type: "DIRECT" | "ACE"; packageName: string; date: Date };
 
-/** When each client started: onboarding fee paid, else ACE slot start, else first paid monthly invoice. */
+/** When each client started: onboarding fee paid, else ACE slot start, else their Stripe subscription start, else first paid monthly invoice. */
 async function clientStarts(): Promise<ClientLine[]> {
   const [clients, slots, firsts] = await Promise.all([
     db.client.findMany({ include: { package: true, onboarding: true } }),
@@ -81,7 +92,7 @@ async function clientStarts(): Promise<ClientLine[]> {
   const firstPaid = new Map(firsts.map((f) => [f.clientId!, f._min.paidAt]));
   const out: ClientLine[] = [];
   for (const c of clients) {
-    const date = c.onboarding?.feePaidAt ?? slotStart.get(c.id) ?? firstPaid.get(c.id) ?? null;
+    const date = c.onboarding?.feePaidAt ?? slotStart.get(c.id) ?? c.startedAt ?? firstPaid.get(c.id) ?? null;
     if (date) out.push({ id: c.id, name: c.name, type: c.type, packageName: c.package?.name ?? "Package not set", date });
   }
   return out;
@@ -130,7 +141,7 @@ export async function activeAndMrr(last: Period, n: number) {
   const buckets = bucketsBetween(last, n);
   const from = buckets[0].start;
   const [invoices, slots, aceClients] = await Promise.all([
-    db.invoice.findMany({ where: { kind: "SUBSCRIPTION", status: { notIn: ["void", "draft"] }, periodStart: { gte: from, lt: last.end }, clientId: { not: null } } }),
+    db.invoice.findMany({ where: { kind: "SUBSCRIPTION", status: { notIn: ["void", "draft"] }, billedAt: { gte: from, lt: last.end }, clientId: { not: null } } }),
     db.aceSlot.findMany({ where: { clientId: { not: null }, startDate: { not: null } } }),
     db.client.findMany({ where: { type: "ACE", acePrepaidUntil: { not: null } }, select: { id: true, acePrepaidUntil: true } }),
   ]);
@@ -139,7 +150,7 @@ export async function activeAndMrr(last: Period, n: number) {
     const active = new Set<string>();
     let mrrCents = 0;
     for (const i of invoices) {
-      if (!within(i.periodStart, b)) continue;
+      if (!within(i.billedAt, b)) continue;
       active.add(i.clientId!);
       mrrCents += i.subtotalCents - i.discountCents - i.cardFeeCents - i.onboardingCents;
     }
@@ -151,11 +162,23 @@ export async function activeAndMrr(last: Period, n: number) {
   });
 }
 
+/** Discounts on paid bills, plus retroactive discounts (partial refunds) by the date they were given. */
 export async function discountsGiven(p: Period) {
-  const rows = await db.invoice.findMany({ where: { status: "paid", paidAt: inPeriod(p), discountCents: { gt: 0 } }, include: { client: true } });
+  const [rows, retro] = await Promise.all([
+    db.invoice.findMany({ where: { status: "paid", paidAt: inPeriod(p), discountCents: { gt: 0 } }, include: { client: true } }),
+    db.auditLog.findMany({ where: { action: "discount_retroactive", at: inPeriod(p) } }),
+  ]);
+  const retroInvoices = retro.length ? await db.invoice.findMany({ where: { id: { in: retro.map((r) => r.entityId) } }, include: { client: true } }) : [];
+  const clientOf = new Map(retroInvoices.map((i) => [i.id, i.client?.name ?? "Unknown client"]));
   const m = new Map<string, number>();
-  for (const r of rows) add(m, r.client?.name ?? "Unknown client", r.discountCents);
-  return { totalCents: rows.reduce((n, r) => n + r.discountCents, 0), byClient: [...m].map(([name, cents]) => ({ name, cents })).sort(byName) };
+  let total = 0;
+  for (const r of rows) { add(m, r.client?.name ?? "Unknown client", r.discountCents); total += r.discountCents; }
+  for (const a of retro) {
+    const cents = Number((a.after as { amountCents?: number } | null)?.amountCents ?? 0);
+    add(m, clientOf.get(a.entityId) ?? "Unknown client", cents);
+    total += cents;
+  }
+  return { totalCents: total, byClient: [...m].map(([name, cents]) => ({ name, cents })).sort(byName) };
 }
 
 export async function commissionsReport(p: Period) {
