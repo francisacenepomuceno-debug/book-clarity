@@ -89,6 +89,19 @@ The portal sends reminders through GHL, so turn off Stripe's duplicates the same
 - Set the **upcoming renewal events** lead time to **3 days** (Settings → Billing → Subscriptions and emails). The portal's "payment coming up" notice uses it.
 - In the **Customer portal** settings, allow updating payment methods with **card and US bank account (ACH)**. Turn **off** cancelling subscriptions and changing plans. The "update payment method" link in reminders opens only the payment-method page, but this keeps anything else off. Also enable the **Customer portal** (Settings → Billing → Customer portal) with "update payment methods" allowed; the "update payment method" links use it.
 
+## 7c. Load past invoices for Reports (once)
+
+Reports read the portal's own copy of your Stripe invoices. New invoices arrive by webhook; this copies the history. It only reads from Stripe and is safe to run again.
+
+1. Open the portal's dashboard once, so your existing clients are synced.
+2. On your computer, in the `portal` folder, with the production `DATABASE_URL` and `STRIPE_SECRET_KEY` set, run:
+
+   ```bash
+   npx tsx scripts/backfill-invoices.ts --since 2025-01-01
+   ```
+
+Old unpaid invoices are copied without a "failed on" date, so they never trigger payment reminders or suspension.
+
 ## 8. Optional: your own address
 
 To use your own address, such as `portal.bookclarity.com`:
