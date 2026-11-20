@@ -85,10 +85,11 @@ describe("months", () => {
 describe("validateSplit", () => {
   it.each([
     [[], false],
-    [[{ executiveId: "j", rateBp: 600 }, { executiveId: "a", rateBp: 500 }], false],
+    [[{ executiveId: "j", rateBp: 2000 }, { executiveId: "a", rateBp: 1500 }], false],
+    [[{ executiveId: "j", rateBp: 600 }, { executiveId: "a", rateBp: 500 }], true],
     [[{ executiveId: "j", rateBp: 500 }, { executiveId: "j", rateBp: 500 }], false],
     [[{ executiveId: "j", rateBp: 0 }], false],
-    [[{ executiveId: "j", rateBp: 1001 }], false],
+    [[{ executiveId: "j", rateBp: 3001 }], false],
     [[{ executiveId: "j", rateBp: 700 }, { executiveId: "a", rateBp: 300 }], true],
     [[{ executiveId: "j", rateBp: 1000 }], true],
   ])("%j → %s", (shares, ok) => {

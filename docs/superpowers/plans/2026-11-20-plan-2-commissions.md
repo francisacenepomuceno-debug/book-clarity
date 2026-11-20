@@ -17,7 +17,7 @@
 
 - **Money:** integer cents. **Rates:** integer basis points (10% = `1000`). Round half-up once per line, using `percentOfCents` from `src/lib/money.ts`.
 - **Commissionable base** = package amount actually paid, after discounts. It **excludes** onboarding fees, the 3% card fee and taxes. Refunds are clawbacks.
-- **Default rate:** 10% (`1000` bp) to one executive. A shared client splits, e.g. Jose `500` + Albert `500`. The shares must add up to the client's total rate. Every share must be > 0 and ≤ `1000`.
+- **Default rate:** 10% (`1000` bp) to one executive. A shared client splits, e.g. Jose `500` + Albert `500`. The shares must add up to the client's total rate. Every share must be > 0, and the total ≤ `3000` (a 30% typo guard; the spec allows totals other than 10%).
 - **Windows:** Direct = first **12** paid monthly invoices. **ACE months 1–6 lump sum and months 7–12 are Plan 3** (this plan must not block them; see `windowMonthsFor`).
 - **$0 invoices** (100% discount) do **not** count toward a window (Q3).
 - **Late payment:** counts in the month the money arrived. Months use the business timezone `BUSINESS_TZ`.

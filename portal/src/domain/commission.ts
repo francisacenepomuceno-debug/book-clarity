@@ -1,7 +1,8 @@
 import { percentOfCents } from "@/lib/money";
 
 export const DEFAULT_RATE_BP = 1000; // 10%
-export const MAX_RATE_BP = 1000;
+/** Spec §9 allows totals other than 10%; this cap only guards against typos. */
+export const MAX_RATE_BP = 3000; // 30%
 
 export type Share = { executiveId: string; rateBp: number; effectiveFrom: Date };
 export type SplitLine = { executiveId: string; rateBp: number };
@@ -66,8 +67,25 @@ export function validateSplit(shares: SplitLine[]): { ok: true } | { ok: false; 
   if (shares.length === 0) return { ok: false, error: "Pick at least one executive." };
   if (new Set(shares.map((s) => s.executiveId)).size !== shares.length) return { ok: false, error: "Each executive can appear only once." };
   if (shares.some((s) => !Number.isInteger(s.rateBp) || s.rateBp <= 0 || s.rateBp > MAX_RATE_BP)) {
-    return { ok: false, error: "Each share must be more than 0% and at most 10%." };
+    return { ok: false, error: "Each share must be more than 0% and at most 30%." };
   }
-  if (shares.reduce((n, s) => n + s.rateBp, 0) > MAX_RATE_BP) return { ok: false, error: "Shares can't add up to more than 10%." };
+  if (shares.reduce((n, s) => n + s.rateBp, 0) > MAX_RATE_BP) return { ok: false, error: "Shares can't add up to more than 30%." };
   return { ok: true };
+}
+
+/** Midnight at the start of a calendar day ("YYYY-MM-DD") in the business timezone, as an instant. */
+export function startOfDayIn(day: string, tz: string): Date {
+  const [y, m, d] = day.split("-").map(Number);
+  const target = Date.UTC(y, m - 1, d);
+  let guess = target;
+  for (let i = 0; i < 2; i++) {
+    const p = Object.fromEntries(
+      new Intl.DateTimeFormat("en-CA", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+        .formatToParts(new Date(guess))
+        .map((x) => [x.type, x.value]),
+    );
+    const wall = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute);
+    guess += target - wall;
+  }
+  return new Date(guess);
 }
