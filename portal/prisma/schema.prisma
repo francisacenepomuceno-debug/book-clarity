@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url       = env("DATABASE_URL")
+  // Neon on Vercel provides a pooled DATABASE_URL and a direct DATABASE_URL_UNPOOLED (used for migrations).
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum Role {
+  SUPER_ADMIN
+  OWNER
+  ADMIN
+}
+
+enum ClientType {
+  DIRECT
+  ACE
+}
+
+enum ClientStatus {
+  ONBOARDING
+  PREPAID_ACE
+  CURRENT
+  UNPAID
+  PAST_DUE
+  AT_RISK
+  PAUSED
+  CONTINUING_AWAITING_PM
+  ENDED
+}
+
+enum InvoiceKind {
+  SUBSCRIPTION
+  ONBOARDING
+  ACE_BATCH
+  OTHER
+}
+
+enum DiscountKind {
+  PERCENT
+  AMOUNT
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  role         Role
+  passwordHash String?
+  totpSecret   String?
+  totpEnabled  Boolean  @default(false)
+  totpLastStep Int?
+  createdAt    DateTime @default(now())
+}
+
+model Package {
+  id                 String   @id @default(cuid())
+  name               String
+  stripePriceId      String   @unique
+  monthlyPriceCents  Int
+  onboardingFeeCents Int
+  isCustom           Boolean  @default(false)
+  active             Boolean  @default(true)
+  clients            Client[]
+}
+
+model Client {
+  id                    String       @id @default(cuid())
+  name                  String
+  email                 String?
+  billingState          String?
+  type                  ClientType   @default(DIRECT)
+  status                ClientStatus @default(ONBOARDING)
+  packageId             String?
+  package               Package?     @relation(fields: [packageId], references: [id])
+  stripeCustomerId      String?      @unique
+  stripeSubscriptionId  String?      @unique
+  ghlContactId          String?
+  defaultPaymentFunding String?
+  subscriptionStatus    String?
+  createdAt             DateTime     @default(now())
+  endedAt               DateTime?
+  invoices              Invoice[]
+  discounts             Discount[]
+}
+
+model Invoice {
+  id                String      @id @default(cuid())
+  stripeInvoiceId   String      @unique
+  clientId          String?
+  client            Client?     @relation(fields: [clientId], references: [id])
+  status            String
+  subtotalCents     Int
+  discountCents     Int         @default(0)
+  cardFeeCents      Int         @default(0)
+  totalCents        Int
+  amountPaidCents   Int         @default(0)
+  paidAt            DateTime?
+  paymentMethodType String?
+  cardFunding       String?
+  firstFailedAt     DateTime?
+  periodStart       DateTime
+  periodEnd         DateTime
+  kind              InvoiceKind
+}
+
+model Discount {
+  id             String       @id @default(cuid())
+  clientId       String
+  client         Client       @relation(fields: [clientId], references: [id])
+  kind           DiscountKind
+  percentOff     Int?
+  amountOffCents Int?
+  months         Int
+  reason         String
+  stripeCouponId String
+  createdById    String
+  createdAt      DateTime     @default(now())
+  replacedAt     DateTime?
+}
+
+model StripeEvent {
+  id          String    @id
+  type        String
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+}
+
+model AuditLog {
+  id       String   @id @default(cuid())
+  actorId  String?
+  action   String
+  entity   String
+  entityId String
+  before   Json?
+  after    Json?
+  at       DateTime @default(now())
+}
+
+model Setting {
+  key   String @id
+  value Json
+}
