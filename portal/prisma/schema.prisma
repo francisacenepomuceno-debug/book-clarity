@@ -81,6 +81,7 @@ model Client {
   ghlContactId          String?
   defaultPaymentFunding String?
   subscriptionStatus    String?
+  commissionMonthsBeforePortal Int @default(0)
   createdAt             DateTime     @default(now())
   endedAt               DateTime?
   invoices              Invoice[]
@@ -96,6 +97,8 @@ model Invoice {
   subtotalCents     Int
   discountCents     Int         @default(0)
   cardFeeCents      Int         @default(0)
+  onboardingCents   Int         @default(0)
+  refundedCents     Int         @default(0)
   totalCents        Int
   amountPaidCents   Int         @default(0)
   paidAt            DateTime?
@@ -143,4 +146,67 @@ model AuditLog {
 model Setting {
   key   String @id
   value Json
+}
+
+model Executive {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+/// Rows sharing (clientId, effectiveFrom) form one split version. Versions are never edited, only added.
+model CommissionShare {
+  id            String   @id @default(cuid())
+  clientId      String
+  executiveId   String
+  rateBp        Int
+  effectiveFrom DateTime
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  @@index([clientId, effectiveFrom])
+}
+
+enum CommissionKind {
+  EARNED
+  CLAWBACK
+}
+
+/// Append-only commission ledger. The unique key makes every write idempotent.
+model CommissionEntry {
+  id          String         @id @default(cuid())
+  executiveId String
+  clientId    String
+  invoiceId   String
+  kind        CommissionKind
+  refundKey   String         @default("")
+  windowIndex Int?
+  baseCents   Int
+  rateBp      Int
+  amountCents Int
+  occurredAt  DateTime
+  month       String
+  createdAt   DateTime       @default(now())
+
+  @@unique([executiveId, invoiceId, kind, refundKey])
+  @@index([executiveId, month])
+  @@index([clientId])
+}
+
+enum StatementStatus {
+  OPEN
+  PAID
+}
+
+model CommissionStatement {
+  id          String          @id @default(cuid())
+  executiveId String
+  month       String
+  status      StatementStatus @default(OPEN)
+  paidAt      DateTime?
+  paidById    String?
+  totalCents  Int?
+
+  @@unique([executiveId, month])
 }
