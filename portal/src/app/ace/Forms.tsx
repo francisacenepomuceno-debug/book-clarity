@@ -11,6 +11,7 @@ import {
   cardPayLinkAction,
   setAceContactAction,
   savePackageAction,
+  saveContractAction,
   setAceCustomerAction,
   type AceFormResult,
 } from "./actions";
@@ -212,5 +213,21 @@ export function AceContactForm({ current }: { current: string }) {
       <button disabled={pending}>Save</button>
       <Msg s={s} ok="Saved. Unpaid-batch reminders go to this address." />
     </form>
+  );
+}
+
+export function ContractForm(p: { packageId: string; template: string; version: string; isDefault: boolean }) {
+  const [s, action, pending] = useActionState<AceFormResult, FormData>(saveContractAction, {});
+  return (
+    <details>
+      <summary>Contract <span className="muted">· version {p.version}{p.isDefault ? " (default from the repository, not yet saved)" : ""}</span></summary>
+      <form action={action}>
+        <input type="hidden" name="packageId" value={p.packageId} />
+        <p className="muted">Fill-in fields look like {"{{client_name}}"}. Keep the {"{{signature:client}}"} and {"{{signature:provider}}"} lines. Clients who already signed keep the copy they signed.</p>
+        <textarea name="template" defaultValue={p.template} rows={18} style={{ width: "100%", fontFamily: "monospace" }} />
+        <button disabled={pending}>Save contract</button>
+        <Msg s={s} ok="Contract saved. New signers get this version." />
+      </form>
+    </details>
   );
 }

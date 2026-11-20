@@ -28,6 +28,7 @@ enum ClientStatus {
   PAST_DUE
   AT_RISK
   PAUSED
+  SUSPENDED
   CONTINUING_AWAITING_PM
   ENDED
 }
@@ -64,6 +65,8 @@ model Package {
   onboardingFeeCents Int
   isCustom           Boolean  @default(false)
   active             Boolean  @default(true)
+  contractTemplate   String?
+  contractVersion    String?
   clients            Client[]
 }
 
@@ -90,6 +93,8 @@ model Client {
   continuationBy        String?
   clientAnsweredAt      DateTime?
   aceSetupSessionId     String?
+  suspendedAt           DateTime?
+  onboarding            Onboarding?
   createdAt             DateTime     @default(now())
   endedAt               DateTime?
   invoices              Invoice[]
@@ -283,4 +288,36 @@ model Notification {
   sentAt    DateTime?
 
   @@index([clientId])
+}
+
+/** A client's self-serve onboarding progress (Plan 4B). */
+model Onboarding {
+  id                 String    @id @default(cuid())
+  clientId           String    @unique
+  client             Client    @relation(fields: [clientId], references: [id])
+  packageId          String?
+  monthlyCents       Int?
+  onboardingFeeCents Int?
+  details            Json?
+  signedAt           DateTime?
+  signerName         String?
+  signerIp           String?
+  signedText         String?
+  signedHash         String?
+  contractVersion    String?
+  quickbooks         String?
+  countersignedAt    DateTime?
+  countersignedById  String?
+  feeInvoiceId       String?
+  feeSetupSessionId  String?
+  feePaidAt          DateTime?
+  stripeSubscriptionId String?
+  intake             Json?
+  intakeAt           DateTime?
+  callBookedAt       DateTime?
+  completedAt        DateTime?
+  lastProgressAt     DateTime  @default(now())
+  createdById        String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 }

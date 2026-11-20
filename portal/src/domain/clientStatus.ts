@@ -8,6 +8,7 @@ export type ClientStatus =
   | "PAST_DUE"
   | "AT_RISK"
   | "PAUSED"
+  | "SUSPENDED"
   | "CONTINUING_AWAITING_PM"
   | "ENDED";
 
@@ -54,6 +55,7 @@ export const STATUS_LABEL: Record<ClientStatus, string> = {
   PAST_DUE: "Past due",
   AT_RISK: "At risk",
   PAUSED: "Paused",
+  SUSPENDED: "Suspended (unpaid)",
   CONTINUING_AWAITING_PM: "Continuing: awaiting payment method",
   ENDED: "Ended",
 };
