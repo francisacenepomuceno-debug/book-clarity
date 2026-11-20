@@ -77,6 +77,7 @@ model Client {
   stripeSubscriptionId  String?      @unique
   ghlContactId          String?
   defaultPaymentFunding String?
+  subscriptionStatus    String?
   createdAt             DateTime     @default(now())
   endedAt               DateTime?
   invoices              Invoice[]
