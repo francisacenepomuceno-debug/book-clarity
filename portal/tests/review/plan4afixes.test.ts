@@ -122,7 +122,7 @@ describe("#6 placeholder names don't overwrite GHL contacts or appear in greetin
 
 describe("#7 a notice stuck mid-send is reported", () => {
   it("runDaily counts PENDING notices older than an hour", async () => {
-    await db.notification.create({ data: { key: "stuck", kind: "t", status: "PENDING", createdAt: new Date(Date.now() - 2 * 3600_000) } });
+    await db.notification.create({ data: { key: "stuck", kind: "t", status: "PENDING", createdAt: new Date(now.getTime() - 2 * 3600_000) } });
     expect((await runDaily(now)).stuckNotices).toBe(1);
   });
 });
