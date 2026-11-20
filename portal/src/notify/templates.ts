@@ -152,4 +152,19 @@ export const templates = {
       sms: sms(`Book Clarity: reminder that the ${i.amount} batch invoice sent ${i.sentOn} is still open. Pay here: ${i.payUrl}`),
     };
   },
+
+  onboardingInvite(i: { name: string; url: string }): Message {
+    return {
+      subject: "Welcome to Book Clarity: let's get you set up",
+      html: html(
+        [
+          `Hi ${esc(firstName(i.name))},`,
+          `Welcome to Book Clarity! Getting started takes about 10 minutes: confirm your package and details, sign your agreement, pay the onboarding fee, answer a few questions about your business, and book your onboarding call.`,
+          `You can stop at any point and pick up where you left off with the same link.`,
+        ],
+        { label: "Start onboarding", url: i.url },
+      ),
+      sms: sms(`Welcome to Book Clarity! Start your onboarding here: ${i.url}`),
+    };
+  },
 };
