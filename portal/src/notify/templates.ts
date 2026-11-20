@@ -189,4 +189,25 @@ export const templates = {
       sms: sms(`Book Clarity: your onboarding fee of ${i.amount} didn't go through. Please try again: ${i.url}`),
     };
   },
+
+  contractExecuted(i: { name: string; text: string }): Message {
+    return {
+      subject: "Your signed Book Clarity agreement",
+      html:
+        html([`Hi ${esc(firstName(i.name))},`, `Your agreement with Book Clarity has been countersigned. A full copy is below for your records.`]) +
+        `<pre style="white-space:pre-wrap;font:13px/1.5 system-ui,sans-serif;background:#fafbfc;border:1px solid #e3e6ea;border-radius:8px;padding:14px;max-width:640px">${esc(i.text)}</pre>`,
+      sms: sms(`Book Clarity: your agreement has been countersigned. We've emailed you a copy.`),
+    };
+  },
+
+  onboardingNudge(i: { name: string; step: string; url: string }): Message {
+    return {
+      subject: "Finish setting up with Book Clarity",
+      html: html(
+        [`Hi ${esc(firstName(i.name))},`, `You're part-way through getting set up with Book Clarity. Your next step is ${esc(i.step)}. It only takes a few minutes, and you can pick up right where you left off.`],
+        { label: "Continue onboarding", url: i.url },
+      ),
+      sms: sms(`Book Clarity: you're almost set up! Next step: ${i.step}. Continue here: ${i.url}`),
+    };
+  },
 };

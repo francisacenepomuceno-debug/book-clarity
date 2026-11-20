@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import { PortalHeader } from "@/app/PortalHeader";
 import { fmtDate, } from "@/lib/format";
 import { CommissionSection } from "./CommissionSection";
+import { OnboardingSection } from "./OnboardingSection";
 import { PortalClientPage } from "./PortalClientPage";
 import { DiscountForm } from "./DiscountForm";
 
@@ -93,6 +94,7 @@ export default async function ClientPage({ params }: { params: Promise<{ subscri
         {client?.type === "ACE" && client.acePrepaidUntil && (
           <p className="muted">ACE client · prepaid until {fmtDate(client.acePrepaidUntil)}</p>
         )}
+        {client && <OnboardingSection clientId={client.id} role={viewer.role} />}
         {client && <CommissionSection clientId={client.id} formKey={subscriptionId} role={viewer.role} />}
       </main>
     </>

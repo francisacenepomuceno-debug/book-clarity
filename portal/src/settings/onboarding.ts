@@ -1,4 +1,7 @@
 import { db } from "@/lib/db";
+import { ForbiddenError, requirePermission } from "@/auth/permissions";
+import { writeAudit } from "@/audit/log";
+import type { ActionResult } from "@/billing/discounts";
 
 export type IntakeQuestion = { label: string; kind: "text" | "long" | "yesno" | "choice"; options: string[] };
 
@@ -64,4 +67,28 @@ export async function getCountersigner() {
     if (u && u.role !== "ADMIN") return u;
   }
   return db.user.findFirst({ where: { role: "OWNER" }, orderBy: { createdAt: "asc" } });
+}
+
+/** Owners: the questionnaire, who countersigns, the onboarding-call booking link, and when unpaid clients are suspended. */
+export async function saveOnboardingSettings(i: OnboardingSettings): Promise<ActionResult> {
+  let actor;
+  try {
+    actor = await requirePermission("ace.manage");
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { ok: false, error: "You don't have permission to do that." };
+    throw e;
+  }
+  if (parseIntakeQuestions(i.intakeQuestions).length === 0) return { ok: false, error: "Add at least one question." };
+  const calendarUrl = i.calendarUrl.trim();
+  if (calendarUrl && !/^https:\/\/\S+$/.test(calendarUrl)) return { ok: false, error: "The booking link must start with https://" };
+  if (!Number.isInteger(i.suspendAfterDays) || i.suspendAfterDays < 7 || i.suspendAfterDays > 120) return { ok: false, error: "Suspend after must be between 7 and 120 days." };
+  if (i.countersignerUserId) {
+    const u = await db.user.findUnique({ where: { id: i.countersignerUserId } });
+    if (!u || u.role === "ADMIN") return { ok: false, error: "The countersigner must be an Owner or the Super Admin." };
+  }
+  const value = { intakeQuestions: i.intakeQuestions.replace(/\r\n/g, "\n").trim(), countersignerUserId: i.countersignerUserId, calendarUrl, suspendAfterDays: i.suspendAfterDays };
+  const before = await getOnboardingSettings();
+  await db.setting.upsert({ where: { key: "onboarding" }, create: { key: "onboarding", value }, update: { value } });
+  await writeAudit({ actorId: actor.id, action: "onboarding_settings_saved", entity: "Setting", entityId: "onboarding", before, after: value });
+  return { ok: true };
 }

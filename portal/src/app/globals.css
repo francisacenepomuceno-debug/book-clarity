@@ -86,3 +86,4 @@ pre.contract { white-space: pre-wrap; font: 13px/1.5 system-ui, -apple-system, S
 .card fieldset { border: 1px solid var(--line); border-radius: 8px; display: grid; gap: 6px; }
 .card textarea, .card select { font: inherit; padding: 6px; border: 1px solid var(--line); border-radius: 6px; }
 @media (max-width: 600px) { pre.contract { max-height: none; } }
+.answers { display: grid; gap: 8px; margin: 10px 0 0; } .answers dt { font-weight: 600; font-size: 13px; } .answers dd { margin: 2px 0 0; white-space: pre-wrap; }
