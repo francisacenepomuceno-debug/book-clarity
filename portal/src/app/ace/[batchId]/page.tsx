@@ -39,6 +39,9 @@ export default async function BatchPage({ params }: { params: Promise<{ batchId:
             : batch.invoiceSentAt ? `Invoice sent to ACE ${fmtDate(batch.invoiceSentAt)}, not paid yet` : batch.stripeInvoiceId ? "Invoice not fully sent" : "Not paid yet"}
           {batch.note && ` · ${batch.note}`}
         </p>
+        {batch.historical && (
+          <p className="muted"><strong>Historical batch</strong> (bought before the portal): no months 1–6 commission is posted for its clients, because it was settled outside the portal.</p>
+        )}
 
         {!batch.paidAt && !batch.invoiceSentAt && batch.stripeInvoiceId && (
           <section className="panel pad">

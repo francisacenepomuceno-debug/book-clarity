@@ -202,6 +202,25 @@ async function login(browser, email, password, totpSecret) {
     await owner.click("button:has-text('Countersign')");
     await owner.waitForSelector("text=Countersigned by", { timeout: 30000 });
     check("an owner can countersign", await owner.isVisible("text=Countersigned by"));
+
+    // Plan 6: launch gating, spreadsheet import, Launch page.
+    const invite = await db.notification.findUnique({ where: { key: `onboarding-invite:${onb.id}` } });
+    check("with notices off, the onboarding invite is recorded as skipped", invite?.status === "SKIPPED" && /turned on/.test(invite.error ?? ""));
+    await owner.goto(`${BASE}/settings/import`);
+    await owner.click("summary:has-text('paste the rows')");
+    await owner.fill("textarea[name=csv]", `client,executive_1,rate_1,months_already_earned\n${onbName},Smoke Exec,10%,0\nNobody At All,Smoke Exec,10%,0`);
+    await owner.click("button:has-text('Check the file')");
+    await owner.waitForSelector("text=Ready to apply (1)", { timeout: 30000 });
+    check("import preview lists ready and unmatched rows", await owner.isVisible("text=No client matches"));
+    await owner.click("button:has-text('Apply 1 row')");
+    await owner.waitForSelector("text=Applied 1 row", { timeout: 30000 });
+    const onbClient = await db.client.findFirst({ where: { name: onbName } });
+    check("owner applies the import", (await db.commissionShare.count({ where: { clientId: onbClient.id } })) > 0);
+    await owner.goto(`${BASE}/settings/launch`);
+    check("super admin opens the Launch page", (await owner.isVisible("h2:has-text('Launch')")) && (await owner.isVisible("text=Client notices: off")));
+    await admin.goto(`${BASE}/settings/launch`);
+    await admin.waitForLoadState("networkidle");
+    check("admin cannot open the Launch page", await admin.isVisible("text=isn't available"));
     await client.close();
   } finally {
     await browser.close();

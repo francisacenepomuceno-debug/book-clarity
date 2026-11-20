@@ -20,6 +20,8 @@ export type LiveClientRow = {
   nextChargeDate: Date | null;
   amountDueCents: number;
   pastDueSince: Date | null;
+  /** Each subscription item's price and product name (for linking to a portal package). */
+  priceItems?: { priceId: string; productName: string }[];
 };
 
 const fromTs = (t: number | null | undefined) => (t ? new Date(t * 1000) : null);
@@ -54,12 +56,14 @@ export function mapSubscription(
   let packageCents = 0;
   let feeCents = 0;
   const packages: string[] = [];
+  const priceItems: { priceId: string; productName: string }[] = [];
   let sixMonth = false;
   let nextCharge: number | null = null;
 
   for (const item of sub.items.data) {
     const productId = idOf(item.price.product as string | { id: string }) ?? "";
     const cls = classifyProduct(productNames.get(productId) ?? productId);
+    priceItems.push({ priceId: item.price.id, productName: productNames.get(productId) ?? productId });
     const cents = (item.price.unit_amount ?? 0) * (item.quantity ?? 1);
     if (cls.kind === "card_fee") feeCents += cents;
     else if (cls.kind === "onboarding") {
@@ -119,5 +123,6 @@ export function mapSubscription(
     nextChargeDate: ended || paused ? null : fromTs(nextCharge),
     amountDueCents: invOpen ? inv!.amount_remaining ?? 0 : 0,
     pastDueSince: failedAt,
+    priceItems,
   };
 }

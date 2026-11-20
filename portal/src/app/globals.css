@@ -117,3 +117,4 @@ tr.total td { font-weight: 600; }
 .alert-group summary { cursor: pointer; }
 .alert-group .count { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 10px; background: #fdecea; color: var(--bad); font-size: 12px; text-align: center; }
 @media (max-width: 600px) { .report-table th, .report-table td { padding: 6px 8px; font-size: 13px; } }
+.checklist li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .checklist button { padding: 2px 8px !important; font-size: 12px; }

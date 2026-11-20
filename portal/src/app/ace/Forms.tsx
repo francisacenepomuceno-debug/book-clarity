@@ -76,6 +76,9 @@ export function NewBatchForm({ packages, today }: { packages: Pkg[]; today: stri
       ))}
       <label className="check"><input type="checkbox" name="alreadyPaid" checked={paid} onChange={(e) => setPaid(e.target.checked)} /> Already paid outside the portal (no Stripe invoice)</label>
       {paid && (
+        <label className="check"><input type="checkbox" name="historical" /> Historical: bought before the portal, commission already settled (no months 1–6 commission is posted)</label>
+      )}
+      {paid && (
         <div className="inline-form">
           <label>Paid on<input name="paidOn" type="date" defaultValue={today} required /></label>
           <label>

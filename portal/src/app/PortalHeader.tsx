@@ -14,6 +14,7 @@ export function PortalHeader(p: { viewerName: string; role: Role; livemode?: boo
     can(p.role, "ace.manage") && { href: "/settings/packages", label: "Packages" },
     can(p.role, "audit.view") && { href: "/audit", label: "Audit" },
     can(p.role, "users.manage") && { href: "/settings/users", label: "Users" },
+    can(p.role, "settings.manage") && { href: "/settings/launch", label: "Launch" },
   ].filter(Boolean) as { href: string; label: string }[];
   return (
     <header>
