@@ -2,6 +2,7 @@ import type Stripe from "stripe";
 import { getStripe } from "@/stripe/client";
 import type { WebhookDeps } from "@/stripe/webhook";
 import type { PaidMethod } from "@/stripe/handlers/invoice";
+import { applyCardFeeToDraft, reconcileCardFee } from "@/stripe/handlers/cardFee";
 
 function methodFromCharge(ch: Stripe.Charge | null | undefined): PaidMethod | null {
   const d = ch?.payment_method_details;
@@ -34,8 +35,12 @@ export function defaultWebhookDeps(over: Partial<WebhookDeps> = {}): WebhookDeps
   return {
     getPaidMethod: (inv) => getPaidMethod(inv),
     getPaymentMethodFunding: (id) => getPaymentMethodFunding(id),
-    onInvoiceCreated: async () => {},
-    onInvoicePaid: async () => {},
+    onInvoiceCreated: async (inv) => {
+      await applyCardFeeToDraft(inv, getStripe());
+    },
+    onInvoicePaid: async (inv, paid) => {
+      await reconcileCardFee(inv, paid, getStripe());
+    },
     ...over,
   };
 }

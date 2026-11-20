@@ -14,7 +14,8 @@ export type FeeDecision = {
 /** Pure rule: 3% only on credit cards. Never debit, prepaid, unknown-funding cards or ACH. */
 export function decideCardFee(i: {
   baseCents: number;
-  paymentMethodType: "card" | "us_bank_account" | null;
+  /** Stripe payment method type ("card", "us_bank_account", "link", …) or null when none. */
+  paymentMethodType: string | null;
   cardFunding: "credit" | "debit" | "prepaid" | "unknown" | null;
   billingState: string | null;
   settings: FeeSettings;
