@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { startOnboardingAction, type StartFormResult } from "./actions";
+import { startOnboardingAction, waiveFeeAction, type StartFormResult } from "./actions";
 
 export function NewClientForm(p: { packages: { id: string; name: string; isCustom: boolean }[]; canSetPrices: boolean }) {
   const [s, action, pending] = useActionState<StartFormResult, FormData>(startOnboardingAction, {});
@@ -25,12 +25,24 @@ export function NewClientForm(p: { packages: { id: string; name: string; isCusto
       {p.canSetPrices && (
         <>
           <label>Custom monthly price ($)<input name="customMonthly" type="number" step="0.01" min="0" placeholder="Custom package only" /></label>
-          <label>Onboarding fee ($)<input name="onboardingFee" type="number" step="0.01" min="0" placeholder="Package default" /></label>
+          <label>Onboarding fee ($)<input name="onboardingFee" type="number" step="0.01" min="0" placeholder="Package default (0 to waive)" /></label>
         </>
       )}
       <button disabled={pending}>Create and send link</button>
       {s.error && <p className="form-error">{s.error}</p>}
       {s.ok && s.url && <p className="form-ok">Sent. Their link: <code>{s.url}</code></p>}
+    </form>
+  );
+}
+
+export function WaiveFeeButton({ onboardingId }: { onboardingId: string }) {
+  const [s, action, pending] = useActionState<StartFormResult, FormData>(waiveFeeAction, {});
+  if (s.ok) return <span className="muted">Fee waived</span>;
+  return (
+    <form action={action} style={{ display: "inline" }} onSubmit={(e) => { if (!confirm("Waive this client's onboarding fee? They'll still add a payment method for monthly autopay.")) e.preventDefault(); }}>
+      <input type="hidden" name="onboardingId" value={onboardingId} />
+      <button className="secondary" disabled={pending} style={{ padding: "2px 8px" }}>Waive fee</button>
+      {s.error && <span className="form-error"> {s.error}</span>}
     </form>
   );
 }

@@ -16,6 +16,9 @@ export type OnboardingRow = {
   signedAt: Date | null;
   countersignedAt: Date | null;
   link: string;
+  /** Onboarding fee not yet paid or under way (an Owner can still waive it). */
+  feeWaivable: boolean;
+  feeCents: number | null;
 };
 
 /** Staff view: every onboarding, newest first, with its current step. Ended clients are left out. */
@@ -39,5 +42,7 @@ export async function listOnboardings(): Promise<OnboardingRow[]> {
     signedAt: o.signedAt,
     countersignedAt: o.countersignedAt,
     link: onboardingLink(o.id),
+    feeCents: o.onboardingFeeCents,
+    feeWaivable: o.client.type === "DIRECT" && !o.feePaidAt && !o.feeSubmittedAt && !o.feeInvoiceId && !o.completedAt && (o.onboardingFeeCents ?? 1) > 0,
   }));
 }
