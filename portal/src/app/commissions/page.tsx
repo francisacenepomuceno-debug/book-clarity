@@ -29,6 +29,7 @@ export default async function CommissionsPage() {
       <main>
         <p><a href="/">← All clients</a></p>
         <h2>Commissions</h2>
+        <p><a href="/settings/import">Import the commission spreadsheet</a></p>
 
         <section className="kpis">
           <div className="kpi"><div className="label">Unpaid commission</div><div className="value">{formatUsd(unpaidTotal)}</div><div className="sub">all open statements</div></div>
