@@ -99,6 +99,7 @@ model Invoice {
   cardFeeCents      Int         @default(0)
   onboardingCents   Int         @default(0)
   refundedCents     Int         @default(0)
+  seenRefundIds     String[]    @default([])
   totalCents        Int
   amountPaidCents   Int         @default(0)
   paidAt            DateTime?
