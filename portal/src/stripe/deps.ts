@@ -3,6 +3,8 @@ import { getStripe } from "@/stripe/client";
 import type { WebhookDeps } from "@/stripe/webhook";
 import type { PaidMethod } from "@/stripe/handlers/invoice";
 import { applyCardFeeToDraft, reconcileCardFee } from "@/stripe/handlers/cardFee";
+import { recordPaymentCommission, recordRefundClawback } from "@/commissions/engine";
+import { db } from "@/lib/db";
 
 function methodFromCharge(ch: Stripe.Charge | null | undefined): PaidMethod | null {
   const d = ch?.payment_method_details;
@@ -31,6 +33,15 @@ export async function getPaymentMethodFunding(pmId: string, stripe: Stripe = get
   return pm.type === "card" ? pm.card?.funding ?? "unknown" : pm.type;
 }
 
+/** The invoice a charge paid, via the invoice payment that references its payment intent. */
+export async function getInvoiceIdForCharge(charge: Stripe.Charge, stripe: Stripe = getStripe()): Promise<string | null> {
+  const pi = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+  if (!pi) return null;
+  const res = await stripe.invoicePayments.list({ payment: { type: "payment_intent", payment_intent: pi }, limit: 1 });
+  const inv = res.data[0]?.invoice;
+  return typeof inv === "string" ? inv : inv?.id ?? null;
+}
+
 export function defaultWebhookDeps(over: Partial<WebhookDeps> = {}): WebhookDeps {
   return {
     getPaidMethod: (inv) => getPaidMethod(inv),
@@ -39,7 +50,14 @@ export function defaultWebhookDeps(over: Partial<WebhookDeps> = {}): WebhookDeps
       await applyCardFeeToDraft(inv, getStripe());
     },
     onInvoicePaid: async (inv, paid) => {
+      // Commission first: it is idempotent and must not be skipped if the fee reconcile throws (Stripe retries).
+      const row = await db.invoice.findUnique({ where: { stripeInvoiceId: inv.id! }, select: { id: true } });
+      if (row) await recordPaymentCommission(row.id);
       await reconcileCardFee(inv, paid, getStripe());
+    },
+    getInvoiceIdForCharge: (charge) => getInvoiceIdForCharge(charge),
+    onRefund: async (invoiceRowId, refund) => {
+      await recordRefundClawback(invoiceRowId, { refundKey: refund.refundKey, packageCents: refund.packageCents });
     },
     ...over,
   };

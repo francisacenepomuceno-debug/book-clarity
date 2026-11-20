@@ -11,6 +11,11 @@ export function isCardFeeLine(line: Pick<Stripe.InvoiceLineItem, "description" |
   return /credit card (processing )?fee/i.test(line.description ?? "");
 }
 
+/** One-off onboarding fee lines (excluded from commission and package revenue). */
+export function isOnboardingLine(line: Pick<Stripe.InvoiceLineItem, "description" | "metadata">): boolean {
+  return line.metadata?.kind === "ONBOARDING" || /onboarding/i.test(line.description ?? "");
+}
+
 export function subscriptionIdOf(inv: Stripe.Invoice): string | null {
   const legacy = (inv as unknown as { subscription?: string | { id: string } | null }).subscription;
   if (legacy) return typeof legacy === "string" ? legacy : legacy.id;

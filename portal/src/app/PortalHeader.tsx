@@ -2,7 +2,7 @@ import { logoutAction } from "@/auth/actions";
 
 const TZ = process.env.BUSINESS_TZ ?? "America/New_York";
 
-export function PortalHeader(p: { viewerName: string; livemode?: boolean; fetchedAt?: Date; refreshHref?: string; showUsersLink?: boolean }) {
+export function PortalHeader(p: { viewerName: string; livemode?: boolean; fetchedAt?: Date; refreshHref?: string; showUsersLink?: boolean; showCommissionsLink?: boolean }) {
   return (
     <header>
       <h1>
@@ -18,6 +18,11 @@ export function PortalHeader(p: { viewerName: string; livemode?: boolean; fetche
               </>
             )}{" "}
             ·{" "}
+          </>
+        )}
+        {p.showCommissionsLink && (
+          <>
+            <a href="/commissions">Commissions</a> ·{" "}
           </>
         )}
         {p.showUsersLink && (

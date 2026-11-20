@@ -1,7 +1,7 @@
 import type Stripe from "stripe";
 import type { Invoice, InvoiceKind } from "@prisma/client";
 import { db } from "@/lib/db";
-import { idOf, isCardFeeLine, subscriptionIdOf } from "@/stripe/lines";
+import { idOf, isCardFeeLine, isOnboardingLine, subscriptionIdOf } from "@/stripe/lines";
 
 const fromTs = (t: number | null | undefined) => (t ? new Date(t * 1000) : null);
 
@@ -29,6 +29,9 @@ export async function upsertInvoiceFromStripe(
   }
   const lines = inv.lines?.data ?? [];
   const cardFeeCents = lines.filter(isCardFeeLine).reduce((n, l) => n + l.amount, 0);
+  const onboardingCents = lines.filter(isOnboardingLine).reduce((n, l) => n + l.amount, 0);
+  const legacyTax = (inv as unknown as { tax?: number | null }).tax;
+  const taxCents = inv.total_taxes ? inv.total_taxes.reduce((n, x) => n + x.amount, 0) : legacyTax ?? 0;
   const discountCents = (inv.total_discount_amounts ?? []).reduce((n, d) => n + d.amount, 0);
 
   const data = {
@@ -37,6 +40,8 @@ export async function upsertInvoiceFromStripe(
     subtotalCents: inv.subtotal,
     discountCents,
     cardFeeCents,
+    onboardingCents,
+    taxCents,
     totalCents: inv.total,
     amountPaidCents: inv.amount_paid ?? 0,
     paidAt: fromTs(inv.status_transitions?.paid_at),

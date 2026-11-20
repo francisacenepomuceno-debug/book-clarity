@@ -57,6 +57,24 @@ async function login(browser, email, password, totpSecret) {
     await owner.waitForSelector("h2", { timeout: 60000 });
     check("client page shows invoice history", await owner.isVisible("th:has-text('Invoice')"));
     check("client page shows discount form to owners", await owner.isVisible("text=Give a discount"));
+    check("owner sees the Commissions link", await owner.isVisible("header a[href='/commissions']"));
+    const clientUrl = owner.url();
+    await owner.goto(`${BASE}/commissions`);
+    await owner.waitForSelector("h2");
+    check("commissions page loads for owners", await owner.isVisible("text=Unpaid commission"));
+    if (!(await owner.isVisible("li:has-text('Smoke Exec')"))) {
+      await owner.fill("form.inline-form input[name=name]", "Smoke Exec");
+      await owner.click("form.inline-form button");
+      await owner.waitForSelector("li:has-text('Smoke Exec')");
+    }
+    check("owner can add an executive", await owner.isVisible("li:has-text('Smoke Exec')"));
+    await owner.goto(clientUrl);
+    await owner.waitForSelector("#commission");
+    await owner.selectOption("#commission select[name=exec1]", { label: "Smoke Exec" });
+    await owner.fill("#commission input[name=rate1]", "10");
+    await owner.click("#commission button");
+    await owner.waitForSelector("#commission .form-ok, #commission .form-error", { timeout: 60000 });
+    check("owner can set a client's commission owner", await owner.isVisible("#commission .form-ok"));
 
     // Admin
     const pw = randomBytes(12).toString("hex");
@@ -72,6 +90,11 @@ async function login(browser, email, password, totpSecret) {
     await admin.waitForSelector("h2", { timeout: 60000 });
     check("admin client page has no discount form", !(await admin.isVisible("text=Give a discount")));
     check("admin client page has no invoices", !(await admin.isVisible("th:has-text('Invoice')")));
+    check("admin client page has no commission section", !(await admin.isVisible("#commission")));
+    check("admin has no Commissions link", !(await admin.isVisible("header a[href='/commissions']")));
+    await admin.goto(`${BASE}/commissions`);
+    await admin.waitForLoadState("networkidle");
+    check("admin cannot open the commissions page", !(await admin.isVisible("text=Unpaid commission")) && (await admin.isVisible("text=isn't available")));
   } finally {
     await browser.close();
     await db.$disconnect();

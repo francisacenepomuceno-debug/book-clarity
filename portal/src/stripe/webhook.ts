@@ -5,6 +5,7 @@ import { upsertInvoiceFromStripe, type PaidMethod } from "@/stripe/handlers/invo
 import { onSubscriptionChanged } from "@/stripe/handlers/subscription";
 import { onCustomerUpdated } from "@/stripe/handlers/customer";
 import { refreshClientStatus } from "@/stripe/clientStatusSync";
+import { onChargeRefunded, type RefundInfo } from "@/stripe/handlers/refund";
 
 export type WebhookDeps = {
   /** How a paid invoice was paid: method type, card funding, and the charge (for fee refunds). */
@@ -14,6 +15,10 @@ export type WebhookDeps = {
   /** Extension points used by the card-fee logic (Task 5). */
   onInvoiceCreated: (inv: Stripe.Invoice) => Promise<void>;
   onInvoicePaid: (inv: Stripe.Invoice, paid: PaidMethod | null) => Promise<void>;
+  /** Which Stripe invoice a refunded charge paid (null if none). */
+  getInvoiceIdForCharge?: (charge: Stripe.Charge) => Promise<string | null>;
+  /** Called once per newly seen refund; the commission engine claws back from it. */
+  onRefund?: (invoiceRowId: string, refund: RefundInfo) => Promise<void>;
 };
 
 /** An unfinished attempt older than this is assumed dead and may be retried. */
@@ -33,6 +38,7 @@ const HANDLED = new Set([
   "customer.subscription.updated",
   "customer.subscription.deleted",
   "customer.updated",
+  "charge.refunded",
 ]);
 
 /** Verified events only. Idempotent by event.id; a failed handler un-records the event so Stripe's retry runs. */
@@ -99,6 +105,8 @@ async function dispatch(event: Stripe.Event, deps: WebhookDeps): Promise<void> {
       return onSubscriptionChanged(obj as Stripe.Subscription, false);
     case "customer.subscription.deleted":
       return onSubscriptionChanged(obj as Stripe.Subscription, true);
+    case "charge.refunded":
+      return onChargeRefunded(obj as Stripe.Charge, deps);
     case "customer.updated":
       return onCustomerUpdated(obj as Stripe.Customer, deps.getPaymentMethodFunding);
   }
