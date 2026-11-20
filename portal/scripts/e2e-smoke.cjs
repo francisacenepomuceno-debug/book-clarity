@@ -140,6 +140,39 @@ async function login(browser, email, password, totpSecret) {
     await admin.goto(`${BASE}/commissions`);
     await admin.waitForLoadState("networkidle");
     check("admin cannot open the commissions page", !(await admin.isVisible("text=Unpaid commission")) && (await admin.isVisible("text=isn't available")));
+
+    // Plan 4B: a new client, from the start link through signing, then the countersign.
+    await admin.goto(`${BASE}/onboarding`);
+    await admin.waitForSelector("text=New client");
+    const onbName = `Smoke Onboard ${Date.now()}`;
+    await admin.fill("form >> input[name=name]", onbName);
+    await admin.fill("form >> input[name=email]", "smoke-onboard@example.com");
+    await admin.selectOption("select[name=packageId]", { label: "Smoke Growth" });
+    await admin.click("text=Create and send link");
+    await admin.waitForSelector(".form-ok code", { timeout: 30000 });
+    const link = await admin.textContent(".form-ok code");
+    check("admin can start a new client's onboarding", Boolean(link && link.includes("/onboard/")));
+    const client = await browser.newPage();
+    await client.goto(link.replace(/^https?:\/\/[^/]+/, BASE));
+    await client.waitForSelector("input[name=business]");
+    for (const [k, v] of Object.entries({ business: onbName, firstName: "Sam", signerName: "Sam Smoke", phone: "555-0100", address1: "1 Main St", city: "Austin", state: "TX", zip: "78701" })) await client.fill(`input[name=${k}]`, v);
+    await client.click("text=Continue to your agreement");
+    await client.waitForSelector("pre.contract", { timeout: 30000 });
+    check("client sees their package contract with their details", (await client.textContent("pre.contract")).includes(onbName));
+    await client.check("input[name=confirmDetails]");
+    await client.check("input[name=agreeAutopay]");
+    await client.check("input[name=quickbooks] >> nth=0");
+    await client.fill("input[name=signerName]", "Sam Smoke");
+    await client.click("text=Sign agreement");
+    await client.waitForSelector("text=Bank account (ACH)", { timeout: 30000 });
+    check("after signing, the client chooses bank or card for the onboarding fee", await client.isVisible("text=Card"));
+    const onb = await db.onboarding.findFirst({ where: { client: { name: onbName } } });
+    check("signed text and fingerprint are stored", Boolean(onb && onb.signedText && onb.signedHash));
+    await owner.goto(`${BASE}/contracts/${onb.id}`);
+    await owner.click("button:has-text('Countersign')");
+    await owner.waitForSelector("text=Countersigned by", { timeout: 30000 });
+    check("an owner can countersign", await owner.isVisible("text=Countersigned by"));
+    await client.close();
   } finally {
     await browser.close();
     await db.$disconnect();
