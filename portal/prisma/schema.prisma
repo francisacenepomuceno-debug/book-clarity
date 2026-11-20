@@ -71,6 +71,7 @@ model Client {
   id                    String       @id @default(cuid())
   name                  String
   email                 String?
+  phone                 String?
   billingState          String?
   type                  ClientType   @default(DIRECT)
   status                ClientStatus @default(ONBOARDING)
