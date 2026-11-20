@@ -37,6 +37,13 @@ describe("waiving the onboarding fee", () => {
     expect((await waiveOnboardingFee(sent.id)).ok).toBe(false);
   });
 
+  it("the Super Admin can waive it too", async () => {
+    const o = await onboarding();
+    as("SUPER_ADMIN");
+    expect(await waiveOnboardingFee(o.id)).toEqual({ ok: true });
+    expect((await db.onboarding.findUniqueOrThrow({ where: { id: o.id } })).onboardingFeeCents).toBe(0);
+  });
+
   it("Admins can't waive it", async () => {
     const o = await onboarding();
     as("ADMIN");
