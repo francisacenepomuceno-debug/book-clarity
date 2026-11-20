@@ -39,7 +39,8 @@ describe("countersigning", () => {
     expect(row).toMatchObject({ countersignedById: "jose", countersignedAt: now });
     expect(row.signedText).toBe(SIGNED); // the client's signed copy is never rewritten
     const notes = await db.notification.findMany();
-    expect(notes.map((n) => n.key)).toEqual([`contract-executed:${o.id}`]);
+    // Fully signed copies go to the client, the countersigner and the office copy address (each once).
+    expect(notes.map((n) => n.key).sort()).toEqual([`contract-executed-copy:${o.id}`, `contract-executed-staff:${o.id}:jose`, `contract-executed:${o.id}`].sort());
     const html = (ghl.send.mock.calls[0][0] as { html: string }).html;
     expect(html).toMatch(/Signed electronically by Jose Owner for Book Clarity, LLC/);
   });

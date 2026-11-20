@@ -190,13 +190,29 @@ export const templates = {
     };
   },
 
-  contractExecuted(i: { name: string; text: string }): Message {
+  contractExecuted(i: { name: string; text: string; downloadUrl: string }): Message {
     return {
       subject: "Your signed Book Clarity agreement",
       html:
-        html([`Hi ${esc(firstName(i.name))},`, `Your agreement with Book Clarity has been countersigned. A full copy is below for your records.`]) +
+        html(
+          [`Hi ${esc(firstName(i.name))},`, `Your agreement with Book Clarity has been countersigned. Download the signed PDF for your records; the full text is also below.`],
+          { label: "Download signed agreement (PDF)", url: i.downloadUrl },
+        ) +
         `<pre style="white-space:pre-wrap;font:13px/1.5 system-ui,sans-serif;background:#fafbfc;border:1px solid #e3e6ea;border-radius:8px;padding:14px;max-width:640px">${esc(i.text)}</pre>`,
       sms: sms(`Book Clarity: your agreement has been countersigned. We've emailed you a copy.`),
+    };
+  },
+
+  contractExecutedCopy(i: { clientName: string; text: string; downloadUrl: string }): Message {
+    return {
+      subject: `Signed agreement: ${i.clientName}`,
+      html:
+        html([`The agreement with <strong>${esc(i.clientName)}</strong> is now signed by both parties. The PDF is also kept in the portal under Onboarding → Signed agreements.`], {
+          label: "Download signed agreement (PDF)",
+          url: i.downloadUrl,
+        }) +
+        `<pre style="white-space:pre-wrap;font:13px/1.5 system-ui,sans-serif;background:#fafbfc;border:1px solid #e3e6ea;border-radius:8px;padding:14px;max-width:640px">${esc(i.text)}</pre>`,
+      sms: sms(`Signed agreement: ${i.clientName}. Download: ${i.downloadUrl}`),
     };
   },
 

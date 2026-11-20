@@ -14,6 +14,8 @@ export type OnboardingSettings = {
   calendarUrl: string;
   /** Days unpaid after the first failed charge before a client is suspended. */
   suspendAfterDays: number;
+  /** Office copy of every fully signed agreement (empty = none). */
+  contractCopyEmail: string;
 };
 
 export const DEFAULT_ONBOARDING_SETTINGS: OnboardingSettings = {
@@ -21,6 +23,7 @@ export const DEFAULT_ONBOARDING_SETTINGS: OnboardingSettings = {
   countersignerUserId: "",
   calendarUrl: "",
   suspendAfterDays: 30,
+  contractCopyEmail: "info@book-clarity.com",
 };
 
 export async function getOnboardingSettings(): Promise<OnboardingSettings> {
@@ -39,7 +42,7 @@ export async function getCountersigner() {
 }
 
 /** Owners: the questionnaire, who countersigns, the onboarding-call booking link, and when unpaid clients are suspended. */
-export async function saveOnboardingSettings(i: OnboardingSettings): Promise<ActionResult> {
+export async function saveOnboardingSettings(i: Omit<OnboardingSettings, "contractCopyEmail"> & { contractCopyEmail?: string }): Promise<ActionResult> {
   let actor;
   try {
     actor = await requirePermission("ace.manage");
@@ -58,7 +61,9 @@ export async function saveOnboardingSettings(i: OnboardingSettings): Promise<Act
     const u = await db.user.findUnique({ where: { id: i.countersignerUserId } });
     if (!u || u.role === "ADMIN") return { ok: false, error: "The countersigner must be an Owner or the Super Admin." };
   }
-  const value = { intakeQuestions: i.intakeQuestions.replace(/\r\n/g, "\n").trim(), countersignerUserId: i.countersignerUserId, calendarUrl, suspendAfterDays: i.suspendAfterDays };
+  const copy = (i.contractCopyEmail ?? (await getOnboardingSettings()).contractCopyEmail).trim().toLowerCase();
+  if (copy && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(copy)) return { ok: false, error: "Enter a valid email for signed-agreement copies, or leave it empty." };
+  const value = { contractCopyEmail: copy, intakeQuestions: i.intakeQuestions.replace(/\r\n/g, "\n").trim(), countersignerUserId: i.countersignerUserId, calendarUrl, suspendAfterDays: i.suspendAfterDays };
   const before = await getOnboardingSettings();
   await db.setting.upsert({ where: { key: "onboarding" }, create: { key: "onboarding", value }, update: { value } });
   await writeAudit({ actorId: actor.id, action: "onboarding_settings_saved", entity: "Setting", entityId: "onboarding", before, after: value });

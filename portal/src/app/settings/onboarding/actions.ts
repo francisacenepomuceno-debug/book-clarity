@@ -11,6 +11,7 @@ export async function saveOnboardingSettingsAction(_: SettingsResult, f: FormDat
     countersignerUserId: String(f.get("countersignerUserId") ?? ""),
     calendarUrl: String(f.get("calendarUrl") ?? ""),
     suspendAfterDays: Number(f.get("suspendAfterDays")),
+    contractCopyEmail: String(f.get("contractCopyEmail") ?? ""),
   });
   if (!r.ok) return { error: r.error };
   revalidatePath("/settings/onboarding");
