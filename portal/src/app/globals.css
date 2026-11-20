@@ -87,3 +87,23 @@ pre.contract { white-space: pre-wrap; font: 13px/1.5 system-ui, -apple-system, S
 .card textarea, .card select { font: inherit; padding: 6px; border: 1px solid var(--line); border-radius: 6px; }
 @media (max-width: 600px) { pre.contract { max-height: none; } }
 .answers { display: grid; gap: 8px; margin: 10px 0 0; } .answers dt { font-weight: 600; font-size: 13px; } .answers dd { margin: 2px 0 0; white-space: pre-wrap; }
+.report-bar { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; }
+.tabs { display: flex; gap: 4px; }
+.tabs a { padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; text-decoration: none; color: var(--text); }
+.tabs a.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+.period-nav { display: flex; gap: 12px; align-items: center; }
+.period-nav a { text-decoration: none; font-size: 18px; }
+.section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.downloads { font-size: 13px; }
+.report-table { overflow-x: auto; }
+.report-table h4 { margin: 14px 0 6px; font-size: 13px; color: var(--muted); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.total td { font-weight: 600; }
+.trend { margin: 8px 0 12px; }
+.trend figcaption { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.trend svg { width: 100%; height: auto; display: block; }
+.trend-axis { stroke: var(--line); stroke-width: 1; }
+.trend-mark { fill: #0969da; }
+.trend-bar:hover .trend-mark { fill: #0757b3; }
+.trend-tick { fill: var(--muted); font-size: 11px; }
+.trend-value { fill: var(--text); font-size: 12px; font-weight: 600; }
