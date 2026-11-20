@@ -59,7 +59,7 @@ model User {
 model Package {
   id                 String   @id @default(cuid())
   name               String
-  stripePriceId      String   @unique
+  stripePriceId      String?  @unique
   monthlyPriceCents  Int
   onboardingFeeCents Int
   isCustom           Boolean  @default(false)
@@ -82,6 +82,9 @@ model Client {
   defaultPaymentFunding String?
   subscriptionStatus    String?
   commissionMonthsBeforePortal Int @default(0)
+  acePrepaidUntil       DateTime?
+  aceSlotId             String?
+  continuationDecision  String?
   createdAt             DateTime     @default(now())
   endedAt               DateTime?
   invoices              Invoice[]
@@ -174,6 +177,7 @@ model CommissionShare {
 enum CommissionKind {
   EARNED
   CLAWBACK
+  ACE_PREPAID
 }
 
 /// Append-only commission ledger. The unique key makes every write idempotent.
@@ -212,4 +216,46 @@ model CommissionStatement {
   totalCents  Int?
 
   @@unique([executiveId, month])
+}
+
+enum AcePayment {
+  STRIPE
+  OUT_OF_BAND
+}
+
+/// One bulk purchase by ACE: slots of 6 months of service + onboarding per package.
+model AceBatch {
+  id               String      @id @default(cuid())
+  purchasedAt      DateTime
+  note             String?
+  totalCents       Int
+  stripeInvoiceId  String?     @unique
+  paidAt           DateTime?
+  paidVia          AcePayment?
+  paymentMethod    String?
+  paymentReference String?
+  createdById      String
+  createdAt        DateTime    @default(now())
+}
+
+model AceBatchLine {
+  id             String @id @default(cuid())
+  batchId        String
+  packageId      String
+  quantity       Int
+  unitPriceCents Int
+
+  @@index([batchId])
+}
+
+model AceSlot {
+  id                 String    @id @default(cuid())
+  batchId            String
+  packageId          String
+  clientId           String?   @unique
+  startDate          DateTime?
+  prepaidUntil       DateTime?
+  customMonthlyCents Int?
+
+  @@index([batchId, packageId])
 }
