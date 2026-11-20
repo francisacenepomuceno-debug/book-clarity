@@ -62,6 +62,7 @@ export async function choosePackage(token: string, packageId: string, now: Date 
   const pkg = await db.package.findUnique({ where: { id: packageId } });
   // Custom packages are priced per client: staff choose them when starting the onboarding.
   if (!pkg || !pkg.active || pkg.isCustom) return { ok: false, error: "Please choose one of the packages shown." };
+  if (!pkg.stripePriceId) return { ok: false, error: "This package can't be chosen online right now. Please contact Book Clarity." };
   const ok = await advance(l.onboarding.id, { packageId: null }, { packageId: pkg.id, monthlyCents: pkg.monthlyPriceCents, onboardingFeeCents: l.onboarding.onboardingFeeCents ?? pkg.onboardingFeeCents }, now);
   if (ok) await db.client.update({ where: { id: l.client.id }, data: { packageId: pkg.id } });
   return ok ? { ok: true } : { ok: false, error: "This step isn't available right now. Please reload the page." };

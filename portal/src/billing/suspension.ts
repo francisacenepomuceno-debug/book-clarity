@@ -43,12 +43,21 @@ export async function runSuspensions(now: Date = new Date(), stripe: Stripe = ge
   for (const inv of due) {
     const c = inv.client!;
     if (seen.has(c.id)) continue;
+    // An Owner resumed this client by hand: failures from before that don't suspend them again.
+    if (c.suspensionWaivedAt && inv.firstFailedAt! <= c.suspensionWaivedAt) continue;
     seen.add(c.id);
-    await stripe.subscriptions.update(
-      c.stripeSubscriptionId!,
-      { pause_collection: { behavior: "void" }, metadata: { [SUSPENDED_META]: "1" } },
-      { idempotencyKey: `bc-suspend-${inv.stripeInvoiceId}` },
-    );
+    try {
+      await stripe.subscriptions.update(
+        c.stripeSubscriptionId!,
+        { pause_collection: { behavior: "void" }, metadata: { [SUSPENDED_META]: "1" } },
+        { idempotencyKey: `bc-suspend-${inv.stripeInvoiceId}` },
+      );
+    } catch (e) {
+      // One client's Stripe error (e.g. cancelled there) mustn't stop the others.
+      console.error(`[suspend] ${c.id}: ${(e as Error).message}`);
+      await writeAudit({ actorId: null, action: "client_suspend_failed", entity: "Client", entityId: c.id, after: { message: (e as Error).message } });
+      continue;
+    }
     const claimed = await db.client.updateMany({ where: { id: c.id, suspendedAt: null }, data: { suspendedAt: now } });
     if (claimed.count !== 1) continue;
     suspended++;
@@ -72,7 +81,10 @@ async function resume(clientId: string, actorId: string | null, reason: string, 
   if (c.stripeSubscriptionId) {
     await stripe.subscriptions.update(c.stripeSubscriptionId, { pause_collection: "", metadata: { [SUSPENDED_META]: "" } });
   }
-  const done = await db.client.updateMany({ where: { id: clientId, suspendedAt: { not: null } }, data: { suspendedAt: null } });
+  const done = await db.client.updateMany({
+    where: { id: clientId, suspendedAt: { not: null } },
+    data: { suspendedAt: null, ...(reason === "manual" ? { suspensionWaivedAt: new Date() } : {}) },
+  });
   if (done.count !== 1) return false;
   await writeAudit({ actorId, action: "client_resumed", entity: "Client", entityId: clientId, after: { reason } });
   await refreshClientStatus(clientId);

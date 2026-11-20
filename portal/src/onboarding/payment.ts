@@ -87,6 +87,7 @@ export async function onOnboardingSetupSucceeded(si: Stripe.SetupIntent, stripe:
   if (feeCents === 0) {
     const now = new Date();
     await db.onboarding.update({ where: { id: o.id }, data: { feeSetupSessionId: si.id, feePaymentMethodId: pm.id, feePaidAt: now, feeSubmittedAt: now, lastProgressAt: now } });
+    await recompleteIfDone(o.id, now);
     await ensureSubscription(o.id, stripe);
     return;
   }
@@ -109,7 +110,14 @@ export async function onOnboardingSetupSucceeded(si: Stripe.SetupIntent, stripe:
   const pkg = o.packageId ? await db.package.findUnique({ where: { id: o.packageId } }) : null;
   const key = `bc-onb-fee-${si.id}`;
   const inv = await stripe.invoices.create(
-    { customer, collection_method: "charge_automatically", auto_advance: false, default_payment_method: pm.id, metadata: { kind: "ONBOARDING", onboardingId: o.id } },
+    {
+      customer,
+      collection_method: "charge_automatically",
+      auto_advance: false,
+      default_payment_method: pm.id,
+      payment_settings: { payment_method_types: [pm.type as Stripe.InvoiceCreateParams.PaymentSettings.PaymentMethodType] },
+      metadata: { kind: "ONBOARDING", onboardingId: o.id },
+    },
     { idempotencyKey: `${key}-inv` },
   );
   await stripe.invoiceItems.create(
@@ -132,11 +140,17 @@ export async function onOnboardingSetupSucceeded(si: Stripe.SetupIntent, stripe:
     if (paid.status === "paid" || paid.status === "open") {
       const now = new Date();
       await db.onboarding.update({ where: { id: o.id }, data: { feeSubmittedAt: now, lastProgressAt: now } });
+      await recompleteIfDone(o.id, now);
     }
   } catch (e) {
     // Declined: the payment page offers to try again (a new setup voids this invoice).
     await writeAudit({ actorId: null, action: "onboarding_fee_declined", entity: "Onboarding", entityId: o.id, after: { message: (e as Error).message } });
   }
+}
+
+/** A client who already did every other step (their earlier payment bounced) is complete again once they've paid. */
+async function recompleteIfDone(onboardingId: string, now: Date) {
+  await db.onboarding.updateMany({ where: { id: onboardingId, completedAt: null, callBookedAt: { not: null }, intakeAt: { not: null } }, data: { completedAt: now } });
 }
 
 /** Webhook (invoice.paid, kind ONBOARDING): records the fee and starts monthly billing 14 days after it was paid. */
@@ -184,7 +198,18 @@ export async function onOnboardingFeeFailed(inv: Stripe.Invoice): Promise<void> 
   if (!onboardingId) return;
   const o = await db.onboarding.findUnique({ where: { id: onboardingId }, include: { client: true } });
   if (!o || o.feePaidAt || o.feeInvoiceId !== inv.id) return;
-  await db.onboarding.update({ where: { id: o.id }, data: { feeSubmittedAt: null } });
-  const t = templates.onboardingFeeFailed({ name: o.client.name, amount: formatUsd(o.onboardingFeeCents ?? 0), url: onboardingLink(o.id) });
+  // Even if they already finished every other step, the link reopens on the payment step.
+  await db.onboarding.update({ where: { id: o.id }, data: { feeSubmittedAt: null, completedAt: null } });
+  const amount = formatUsd(o.onboardingFeeCents ?? 0);
+  const t = templates.onboardingFeeFailed({ name: o.client.name, amount, url: onboardingLink(o.id) });
   await sendNotice({ key: `onboarding-fee-failed:${inv.id}`, kind: "onboarding-fee-failed", clientId: o.clientId, to: { name: o.client.name, email: o.client.email, phone: o.client.phone }, email: t, sms: t.sms });
+  const owners = await db.user.findMany({ where: { role: "OWNER" } });
+  for (const u of owners) {
+    await sendNotice({
+      key: `onboarding-fee-failed-staff:${inv.id}:${u.id}`,
+      kind: "onboarding-fee-failed-staff",
+      to: { name: u.name, email: u.email },
+      email: { subject: `${o.client.name}'s onboarding fee didn't go through`, html: `<p>${o.client.name}'s onboarding fee of ${amount} failed (a bank payment can bounce days later). They've been asked to pay again from their onboarding link; monthly billing won't start until they do.</p>` },
+    });
+  }
 }

@@ -142,6 +142,8 @@ async function login(browser, email, password, totpSecret) {
     check("admin cannot open the commissions page", !(await admin.isVisible("text=Unpaid commission")) && (await admin.isVisible("text=isn't available")));
 
     // Plan 4B: a new client, from the start link through signing, then the countersign.
+    // Direct clients need a package linked to a Stripe price (local test data only).
+    await db.package.updateMany({ where: { name: "Smoke Growth", stripePriceId: null }, data: { stripePriceId: `price_smoke_${Date.now()}` } });
     await admin.goto(`${BASE}/onboarding`);
     await admin.waitForSelector("text=New client");
     const onbName = `Smoke Onboard ${Date.now()}`;
@@ -149,7 +151,8 @@ async function login(browser, email, password, totpSecret) {
     await admin.fill("form >> input[name=email]", "smoke-onboard@example.com");
     await admin.selectOption("select[name=packageId]", { label: "Smoke Growth" });
     await admin.click("text=Create and send link");
-    await admin.waitForSelector(".form-ok code", { timeout: 30000 });
+    await admin.waitForSelector(".form-ok code, form .form-error", { timeout: 30000 });
+    if (await admin.isVisible("form .form-error")) console.log("new client form error:", await admin.textContent("form .form-error"));
     const link = await admin.textContent(".form-ok code");
     check("admin can start a new client's onboarding", Boolean(link && link.includes("/onboard/")));
     const client = await browser.newPage();

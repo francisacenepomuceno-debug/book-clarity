@@ -94,6 +94,7 @@ model Client {
   clientAnsweredAt      DateTime?
   aceSetupSessionId     String?
   suspendedAt           DateTime?
+  suspensionWaivedAt    DateTime?
   onboarding            Onboarding?
   createdAt             DateTime     @default(now())
   endedAt               DateTime?

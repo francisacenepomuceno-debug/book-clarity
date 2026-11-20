@@ -32,7 +32,7 @@ export default async function OnboardPage({ params }: { params: Promise<{ token:
   const s = l.step;
 
   if (s === "package") {
-    const packages = await db.package.findMany({ where: { active: true, isCustom: false }, orderBy: { monthlyPriceCents: "asc" } });
+    const packages = await db.package.findMany({ where: { active: true, isCustom: false, stripePriceId: { not: null } }, orderBy: { monthlyPriceCents: "asc" } });
     return (
       <Shell step={s} ace={ace}>
         <p>Choose your bookkeeping package:</p>

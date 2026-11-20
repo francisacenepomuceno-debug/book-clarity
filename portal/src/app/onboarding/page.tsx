@@ -9,7 +9,7 @@ import { NewClientForm } from "./Forms";
 export const dynamic = "force-dynamic";
 const STUCK_MS = 3 * 86400_000;
 
-function Table({ rows, showStep, now }: { rows: OnboardingRow[]; showStep?: boolean; now: number }) {
+function Table({ rows, showStep, now, owner }: { rows: OnboardingRow[]; showStep?: boolean; now: number; owner: boolean }) {
   if (rows.length === 0) return <p className="muted">None.</p>;
   return (
     <table>
@@ -31,7 +31,7 @@ function Table({ rows, showStep, now }: { rows: OnboardingRow[]; showStep?: bool
             <td>{fmtDate(r.startedAt)}</td>
             <td>{r.callBookedAt ? fmtDate(r.callBookedAt) : "Not scheduled"}</td>
             <td>
-              {!r.signedAt ? "Not signed" : r.countersignedAt ? "Fully signed" : <a href={`/contracts/${r.onboardingId}`}>Awaiting countersign</a>}
+              {!r.signedAt ? "Not signed" : r.countersignedAt ? "Fully signed" : owner ? <a href={`/contracts/${r.onboardingId}`}>Awaiting countersign</a> : "Awaiting countersign"}
             </td>
             <td><input readOnly value={r.link} style={{ width: 140 }} /></td>
           </tr>
@@ -45,6 +45,7 @@ export default async function OnboardingPage() {
   const viewer = await requirePermission("onboarding.view");
   const [rows, packages] = await Promise.all([listOnboardings(), listPackages()]);
   const now = Date.now();
+  const owner = can(viewer.role, "ace.manage");
   const notStarted = rows.filter((r) => r.lastProgressAt.getTime() === r.startedAt.getTime() && r.step !== "done");
   const inProgress = rows.filter((r) => r.step !== "done" && !notStarted.includes(r));
   const done = rows.filter((r) => r.step === "done");
@@ -59,17 +60,17 @@ export default async function OnboardingPage() {
         <section className="panel pad">
           <h3>New client</h3>
           <p className="muted">Creates the client and emails (and texts, if a phone is given) their onboarding link: package, details, agreement, onboarding fee, questionnaire, and booking the call.</p>
-          <NewClientForm packages={packages.filter((p) => p.active).map((p) => ({ id: p.id, name: p.name, isCustom: p.isCustom }))} />
+          <NewClientForm packages={packages.filter((p) => p.active).map((p) => ({ id: p.id, name: p.name, isCustom: p.isCustom }))} canSetPrices={can(viewer.role, "discounts.apply")} />
         </section>
         {can(viewer.role, "ace.manage") && awaitingCountersign.length > 0 && (
           <section className="panel pad">
             <h3>Waiting for countersignature ({awaitingCountersign.length})</h3>
-            <Table rows={awaitingCountersign} showStep now={now} />
+            <Table rows={awaitingCountersign} showStep now={now} owner={owner} />
           </section>
         )}
-        <section className="panel pad"><h3>In progress ({inProgress.length})</h3><Table rows={inProgress} showStep now={now} /></section>
-        <section className="panel pad"><h3>Not started ({notStarted.length})</h3><Table rows={notStarted} now={now} /></section>
-        <section className="panel pad"><h3>Done ({done.length})</h3><Table rows={done} now={now} /></section>
+        <section className="panel pad"><h3>In progress ({inProgress.length})</h3><Table rows={inProgress} showStep now={now} owner={owner} /></section>
+        <section className="panel pad"><h3>Not started ({notStarted.length})</h3><Table rows={notStarted} now={now} owner={owner} /></section>
+        <section className="panel pad"><h3>Done ({done.length})</h3><Table rows={done} now={now} owner={owner} /></section>
       </main>
     </>
   );

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { requirePermission } from "@/auth/permissions";
+import { can, requirePermission } from "@/auth/permissions";
 import { writeAudit } from "@/audit/log";
 import { signLink, verifyLink } from "@/lib/links";
 import { sendNotice } from "@/notify/send";
@@ -42,6 +42,11 @@ export async function startOnboarding(i: StartInput): Promise<ActionResult<{ onb
   if (!name) return { ok: false, error: "Enter the client's name." };
   if (!EMAIL.test(email)) return { ok: false, error: "Enter a valid email address." };
   if (i.onboardingFeeCents != null && (!Number.isInteger(i.onboardingFeeCents) || i.onboardingFeeCents < 0)) return { ok: false, error: "Enter a valid onboarding fee." };
+  // A changed fee or a custom price is effectively a discount: Owners only (D1).
+  if ((i.onboardingFeeCents != null || i.customMonthlyCents != null) && !can(actor.role, "discounts.apply")) {
+    return { ok: false, error: "Only Owners can set a custom price or onboarding fee. Leave those blank, or ask an Owner." };
+  }
+  if (i.type === "ACE" && !i.packageId) return { ok: false, error: "Choose the ACE client's package (from their ACE slot)." };
 
   let pricing: { monthlyCents: number; onboardingFeeCents: number } | null = null;
   if (i.packageId) {
@@ -49,6 +54,7 @@ export async function startOnboarding(i: StartInput): Promise<ActionResult<{ onb
     if (!pkg || !pkg.active) return { ok: false, error: "Choose an active package." };
     pricing = pricingFor(pkg, i.customMonthlyCents, i.onboardingFeeCents);
     if (pricing.monthlyCents <= 0) return { ok: false, error: "Enter the monthly price for this Custom package." };
+    if (i.type === "DIRECT" && !pkg.stripePriceId) return { ok: false, error: "Link this package to its Stripe price on the Packages page first, or the client can't be billed monthly." };
   }
 
   const { client, onboarding } = await db.$transaction(async (tx) => {
@@ -56,7 +62,7 @@ export async function startOnboarding(i: StartInput): Promise<ActionResult<{ onb
       data: { name, email, phone: i.phone?.trim() || null, type: i.type, status: "ONBOARDING", packageId: i.packageId ?? null },
     });
     const onboarding = await tx.onboarding.create({
-      data: { clientId: client.id, packageId: i.packageId ?? null, ...(pricing ?? {}), createdById: actor.id },
+      data: { clientId: client.id, packageId: i.packageId ?? null, ...(pricing ?? { onboardingFeeCents: i.onboardingFeeCents ?? null }), createdById: actor.id },
     });
     return { client, onboarding };
   });
