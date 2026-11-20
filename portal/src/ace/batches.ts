@@ -74,9 +74,12 @@ export async function createBatch(i: {
   lines: Line[];
   note?: string;
   alreadyPaid?: { paidOn: string; method: "check" | "bank_transfer" | "ach" | "card"; reference: string };
+  /** Bought before the portal: commission was settled outside it, so no months 1–6 lump sum is posted. */
+  historical?: boolean;
 }): Promise<ActionResult<{ batchId: string }>> {
   const actor = await aceManager();
   if (!actor) return FORBIDDEN;
+  if (i.historical && !i.alreadyPaid) return { ok: false, error: "A historical batch must be marked as already paid outside the portal." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(i.purchasedOn)) return { ok: false, error: "Pick the purchase date." };
   if (i.lines.length === 0 || i.lines.some((l) => !Number.isInteger(l.quantity) || l.quantity < 1 || !Number.isInteger(l.unitPriceCents) || l.unitPriceCents < 1)) {
     return { ok: false, error: "Each line needs a quantity of at least 1 and a price per slot." };
@@ -93,6 +96,7 @@ export async function createBatch(i: {
         note: i.note?.trim() || null,
         totalCents: batchTotals(i.lines),
         createdById: actor.id,
+        historical: !!i.historical,
         ...(i.alreadyPaid
           ? {
               paidAt: startOfDayIn(i.alreadyPaid.paidOn, tz()),
@@ -112,7 +116,7 @@ export async function createBatch(i: {
     const issued = await issue(batch.id);
     if (!issued.ok) return issued;
   }
-  await writeAudit({ actorId: actor.id, action: "ace_batch_created", entity: "AceBatch", entityId: batch.id, after: { lines: i.lines, totalCents: batch.totalCents, alreadyPaid: !!i.alreadyPaid } });
+  await writeAudit({ actorId: actor.id, action: "ace_batch_created", entity: "AceBatch", entityId: batch.id, after: { lines: i.lines, totalCents: batch.totalCents, alreadyPaid: !!i.alreadyPaid, historical: !!i.historical } });
   return { ok: true, batchId: batch.id };
 }
 
@@ -246,6 +250,7 @@ export type BatchSummary = {
   paymentReference: string | null;
   stripeInvoiceId: string | null;
   invoiceSentAt: Date | null;
+  historical: boolean;
   packages: { packageId: string; name: string; quantity: number; unitPriceCents: number; used: number; open: number }[];
 };
 

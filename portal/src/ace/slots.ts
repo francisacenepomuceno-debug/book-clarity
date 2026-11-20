@@ -86,7 +86,8 @@ export async function postAceCommission(slotId: string): Promise<number> {
   const slot = await db.aceSlot.findUnique({ where: { id: slotId } });
   if (!slot?.clientId || !slot.startDate) return 0;
   const batch = await db.aceBatch.findUniqueOrThrow({ where: { id: slot.batchId } });
-  if (!batch.paidAt) return 0;
+  // Historical batches (entered at migration): the months 1–6 commission was settled outside the portal.
+  if (!batch.paidAt || batch.historical) return 0;
   const pkg = await db.package.findUniqueOrThrow({ where: { id: slot.packageId } });
   const base = aceLumpBase({ monthlyListCents: slot.customMonthlyCents ?? pkg.monthlyPriceCents });
   if (base <= 0) return 0;

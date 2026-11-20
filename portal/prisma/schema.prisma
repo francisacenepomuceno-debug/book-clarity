@@ -264,6 +264,8 @@ model AceBatch {
   paymentReference String?
   /** 3% fee ACE paid on top when paying a batch by credit card. */
   cardFeeCents     Int         @default(0)
+  /** Entered at migration: bought before the portal, commission already settled outside it. */
+  historical       Boolean     @default(false)
   createdById      String
   createdAt        DateTime    @default(now())
 }

@@ -41,6 +41,7 @@ export async function createBatchAction(_: AceFormResult, f: FormData): Promise<
     .map((n) => ({ packageId: str(f.get(`pkg${n}`)), quantity: Number(f.get(`qty${n}`)), unitPriceCents: cents(f.get(`price${n}`)) }))
     .filter((l) => l.packageId);
   const paid = f.get("alreadyPaid") === "on";
+  const historical = paid && f.get("historical") === "on";
   const r = await createBatch({
     purchasedOn: str(f.get("purchasedOn")),
     note: str(f.get("note")),
@@ -48,6 +49,7 @@ export async function createBatchAction(_: AceFormResult, f: FormData): Promise<
     alreadyPaid: paid
       ? { paidOn: str(f.get("paidOn")), method: (str(f.get("method")) || "check") as "check", reference: str(f.get("reference")) }
       : undefined,
+    historical,
   });
   if (!r.ok) return { error: r.error };
   revalidatePath("/ace");
