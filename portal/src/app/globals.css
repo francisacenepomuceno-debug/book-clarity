@@ -107,3 +107,12 @@ tr.total td { font-weight: 600; }
 .trend-bar:hover .trend-mark { fill: #0757b3; }
 .trend-tick { fill: var(--muted); font-size: 11px; }
 .trend-value { fill: var(--text); font-size: 12px; font-weight: 600; }
+.owner-panels { margin: 0 0 16px; }
+.owner-panels h3 { margin: 0 0 8px; }
+.big { font-size: 22px; font-weight: 600; margin: 4px 0 8px; }
+.big .muted { font-size: 14px; font-weight: 400; }
+.meter { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.meter span { display: block; height: 100%; background: var(--ok); border-radius: 4px; }
+.alert-group { border-top: 1px solid var(--line); padding: 6px 0; }
+.alert-group summary { cursor: pointer; }
+.alert-group .count { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 10px; background: #fdecea; color: var(--bad); font-size: 12px; text-align: center; }

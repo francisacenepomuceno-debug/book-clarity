@@ -3,6 +3,9 @@ import { STATUS_LABEL, type ClientStatus } from "@/domain/clientStatus";
 import { formatUsd } from "@/lib/money";
 import { can, requirePermission } from "@/auth/permissions";
 import { aceDashboardRows, scopeRow, withClientTypes, type ClientRow } from "@/clients/queries";
+import { periodOf } from "@/domain/periods";
+import { expectedVsCollected } from "@/reports/queries";
+import { dashboardAlerts } from "@/reports/alerts";
 import { PortalHeader } from "@/app/PortalHeader";
 import { fmtDate } from "@/lib/format";
 
@@ -22,9 +25,42 @@ const FILTERS: { key: ClientStatus | "ALL"; label: string }[] = [
 const ORDER: ClientStatus[] = ["SUSPENDED", "AT_RISK", "PAST_DUE", "UNPAID", "CONTINUING_AWAITING_PM", "PAUSED", "CURRENT", "PREPAID_ACE", "ONBOARDING"];
 const sum = (rows: ClientRow[], f: (r: ClientRow) => number | undefined) => rows.reduce((n, r) => n + (f(r) ?? 0), 0);
 
+/** Owner and Super Admin only: this month's expected vs collected, and what needs attention. */
+async function OwnerPanels() {
+  const month = periodOf("month", new Date(), process.env.BUSINESS_TZ ?? "America/New_York");
+  const [ec, alerts] = await Promise.all([expectedVsCollected(month), dashboardAlerts()]);
+  const pct = ec.expectedCents ? Math.min(100, Math.round((ec.collectedCents / ec.expectedCents) * 100)) : 0;
+  return (
+    <div className="two-col owner-panels">
+      <section className="panel pad">
+        <h3>{month.label}: collected so far</h3>
+        <p className="big">{formatUsd(ec.collectedCents)} <span className="muted">of {formatUsd(ec.expectedCents)} expected</span></p>
+        <div className="meter" role="img" aria-label={`${pct}% collected`}><span style={{ width: `${pct}%` }} /></div>
+        <p className="muted">{pct}% of this month's monthly bills collected · Past due: <strong>{formatUsd(ec.outstandingPastDueCents)}</strong> · <a href="/reports">Reports</a></p>
+      </section>
+      <section className="panel pad">
+        <h3>Needs attention</h3>
+        {alerts.length === 0 ? (
+          <p className="muted">Nothing needs attention right now.</p>
+        ) : (
+          alerts.map((g) => (
+            <details key={g.kind} className="alert-group" open={g.items.length <= 3}>
+              <summary><strong>{g.title}</strong> <span className="count">{g.items.length}</span></summary>
+              <ul className="plain">
+                {g.items.map((i) => <li key={i.href + i.name}><a href={i.href}>{i.name}</a> <span className="muted">· {i.detail}</span></li>)}
+              </ul>
+            </details>
+          ))
+        )}
+      </section>
+    </div>
+  );
+}
+
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ status?: string; refresh?: string }> }) {
   const viewer = await requirePermission("clients.view");
   const money = can(viewer.role, "clients.viewFinancials");
+  const owner = can(viewer.role, "reports.view");
   const { status = "ALL", refresh } = await searchParams;
 
   let snap;
@@ -83,6 +119,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
             </>
           )}
         </section>
+
+        {owner && <OwnerPanels />}
 
         <section className="panel">
           <table>
