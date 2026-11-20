@@ -25,6 +25,9 @@ export type WebhookDeps = {
   onAceSetupCompleted?: (session: Stripe.Checkout.Session) => Promise<void>;
   /** ACE saved a card to pay a batch (checkout.session.completed, ACE_BATCH_CARD). */
   onAceCardSetupCompleted?: (session: Stripe.Checkout.Session) => Promise<void>;
+  /** Client notices: payment coming up (invoice.upcoming) and payment failed (day 0). */
+  onUpcomingInvoice?: (inv: Stripe.Invoice) => Promise<void>;
+  onPaymentFailedNotice?: (invoiceRowId: string) => Promise<void>;
 };
 
 /** An unfinished attempt older than this is assumed dead and may be retried. */
@@ -46,6 +49,7 @@ const HANDLED = new Set([
   "customer.updated",
   "charge.refunded",
   "checkout.session.completed",
+  "invoice.upcoming",
 ]);
 
 /** Verified events only. Idempotent by event.id; a failed handler un-records the event so Stripe's retry runs. */
@@ -83,6 +87,11 @@ async function dispatch(event: Stripe.Event, deps: WebhookDeps): Promise<void> {
     case "invoice.payment_failed": {
       const row = await upsertInvoiceFromStripe(obj as Stripe.Invoice, { failedNow: true });
       if (row?.clientId) await refreshClientStatus(row.clientId);
+      if (row) await deps.onPaymentFailedNotice?.(row.id);
+      return;
+    }
+    case "invoice.upcoming": {
+      await deps.onUpcomingInvoice?.(obj as Stripe.Invoice);
       return;
     }
     case "invoice.paid": {
