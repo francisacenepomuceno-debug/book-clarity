@@ -18,7 +18,11 @@ export async function startPaymentUpdate(token: string, baseUrl: string): Promis
   const session = await getStripe().billingPortal.sessions.create({
     customer: client.stripeCustomerId,
     return_url: `${baseUrl}/setup-complete?updated=1`,
-    flow_data: { type: "payment_method_update" },
+    // Straight back after updating — never land on the full billing portal (cancel, invoices, etc.).
+    flow_data: {
+      type: "payment_method_update",
+      after_completion: { type: "redirect", redirect: { return_url: `${baseUrl}/setup-complete?updated=1` } },
+    },
   });
   return { url: session.url };
 }

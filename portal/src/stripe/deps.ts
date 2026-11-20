@@ -56,6 +56,11 @@ export function defaultWebhookDeps(over: Partial<WebhookDeps> = {}): WebhookDeps
       await reconcileCardFee(inv, paid, getStripe());
     },
     getInvoiceIdForCharge: (charge) => getInvoiceIdForCharge(charge),
+    getInvoiceIdForPaymentIntent: async (pi) => {
+      const res = await getStripe().invoicePayments.list({ payment: { type: "payment_intent", payment_intent: pi }, limit: 1 });
+      const inv = res.data[0]?.invoice;
+      return typeof inv === "string" ? inv : inv?.id ?? null;
+    },
     onAceSetupCompleted: async (session) => {
       const { onSetupCompleted } = await import("@/ace/continuation");
       await onSetupCompleted(session);

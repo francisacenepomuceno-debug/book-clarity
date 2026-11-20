@@ -25,6 +25,7 @@ async function call<T>(path: string, body: unknown, f: typeof fetch): Promise<T>
       Accept: "application/json",
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -35,10 +36,11 @@ async function call<T>(path: string, body: unknown, f: typeof fetch): Promise<T>
 
 /** Creates or updates a contact (matched by email/phone) and returns its id. */
 export async function ghlUpsertContact(
-  i: { name: string; email?: string | null; phone?: string | null },
+  i: { name?: string | null; email?: string | null; phone?: string | null },
   f: typeof fetch = fetch,
 ): Promise<string> {
-  const body: Record<string, string> = { locationId: process.env.GHL_LOCATION_ID!, name: i.name };
+  const body: Record<string, string> = { locationId: process.env.GHL_LOCATION_ID! };
+  if (i.name) body.name = i.name;
   if (i.email) body.email = i.email;
   if (i.phone) body.phone = i.phone;
   const r = await call<{ contact: { id: string } }>("/contacts/upsert", body, f);

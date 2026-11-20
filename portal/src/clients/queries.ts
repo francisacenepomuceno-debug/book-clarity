@@ -53,17 +53,27 @@ export async function syncClientsFromSnapshot(rows: LiveClientRow[]): Promise<vo
   for (const r of byCustomer.values()) {
     // Create missing clients only. Status, subscription link and Stripe status belong to the webhooks;
     // only contact details are refreshed here.
-    await db.client.upsert({
-      where: { stripeCustomerId: r.customerId },
-      create: {
-        stripeCustomerId: r.customerId,
-        stripeSubscriptionId: r.subscriptionId,
-        name: r.name,
-        email: r.email,
-        status: r.status,
-        subscriptionStatus: r.status === "PAUSED" ? "paused" : null,
-      },
-      update: { name: r.name, email: r.email },
+    const existing = await db.client.findUnique({ where: { stripeCustomerId: r.customerId } });
+    if (!existing) {
+      await db.client.create({
+        data: {
+          stripeCustomerId: r.customerId,
+          stripeSubscriptionId: r.subscriptionId,
+          name: r.name,
+          email: r.email,
+          phone: r.phone ?? null,
+          status: r.status,
+          subscriptionStatus: r.status === "PAUSED" ? "paused" : null,
+        },
+      });
+      continue;
+    }
+    const phone = r.phone ?? existing.phone;
+    const contactChanged = r.email !== existing.email || phone !== existing.phone;
+    await db.client.update({
+      where: { id: existing.id },
+      // A changed email/phone means the cached GHL contact may be the wrong person: look it up again next time.
+      data: { name: r.name, email: r.email, phone, ...(contactChanged ? { ghlContactId: null } : {}) },
     });
   }
 }

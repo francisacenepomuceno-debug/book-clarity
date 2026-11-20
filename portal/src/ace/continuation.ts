@@ -61,7 +61,7 @@ export async function markContinuing(clientId: string, baseUrl: string): Promise
   if (client.endedAt && client.endedAt <= new Date()) return { ok: false, error: "This client's service has already ended." };
   await ensureCustomer(client);
   // Winning a client back undoes a confirmed end, up to their last prepaid day.
-  await db.client.update({ where: { id: clientId }, data: { continuationDecision: "CONTINUING", endedAt: null } });
+  await db.client.update({ where: { id: clientId }, data: { continuationDecision: "CONTINUING", continuationBy: "OWNER", endedAt: null } });
   await refreshClientStatus(clientId);
   await writeAudit({ actorId: actor.id, action: "ace_continuing", entity: "Client", entityId: clientId });
   return { ok: true, setupUrl: `${baseUrl}/continue/${continuationToken(clientId)}` };
@@ -98,7 +98,12 @@ export async function answerContinuation(
   if (client.continuationDecision === "ENDING" || !(beforeEnd || client.continuationDecision === "CONTINUING")) return { error: LINK_INACTIVE };
 
   if (answer === "NO") {
-    await db.client.update({ where: { id: client.id }, data: { clientAnswer: "NO", clientAnsweredAt: now } });
+    // A client's own No undoes their own earlier Yes, but never an Owner's decision.
+    const undoOwnYes = client.continuationDecision === "CONTINUING" && client.continuationBy === "CLIENT";
+    await db.client.update({
+      where: { id: client.id },
+      data: { clientAnswer: "NO", clientAnsweredAt: now, ...(undoOwnYes ? { continuationDecision: null, continuationBy: null } : {}) },
+    });
     await writeAudit({ actorId: null, action: "ace_client_answered_no", entity: "Client", entityId: client.id });
     return {
       message:
@@ -106,7 +111,10 @@ export async function answerContinuation(
     };
   }
   await ensureCustomer(client);
-  await db.client.update({ where: { id: client.id }, data: { clientAnswer: "YES", clientAnsweredAt: now, continuationDecision: "CONTINUING" } });
+  await db.client.update({
+    where: { id: client.id },
+    data: { clientAnswer: "YES", clientAnsweredAt: now, continuationDecision: "CONTINUING", ...(client.continuationBy === "OWNER" ? {} : { continuationBy: "CLIENT" }) },
+  });
   await refreshClientStatus(client.id);
   await writeAudit({ actorId: null, action: "ace_client_answered_yes", entity: "Client", entityId: client.id });
   const r = await startSetupFromToken(token, baseUrl);

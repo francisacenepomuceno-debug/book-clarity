@@ -5,7 +5,9 @@
 export type Message = { subject: string; html: string; sms: string };
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
+/** First word of a real name; "there" for placeholders or email-looking names ("Hi there,"). */
+export const looksLikeName = (name: string) => Boolean(name.trim()) && !name.includes("@") && !name.trim().startsWith("(");
+const firstName = (name: string) => (looksLikeName(name) ? name.trim().split(/\s+/)[0] : "there");
 
 function html(paragraphs: string[], button?: { label: string; url: string }): string {
   const body = paragraphs.map((p) => `<p style="margin:0 0 14px">${p}</p>`).join("");
@@ -105,6 +107,34 @@ export const templates = {
         { label: "Open client", url: i.clientUrl },
       ),
       sms: sms(`Book Clarity portal: ${i.clientName}'s ACE period ended ${i.endDate} with no decision. ${i.clientUrl}`),
+    };
+  },
+
+  aceSetupReminder(i: { name: string; endDate: string; continueUrl: string }): Message {
+    return {
+      subject: "One last step to continue with Book Clarity",
+      html: html(
+        [
+          `Hi ${esc(firstName(i.name))},`,
+          `Thank you for choosing to continue with Book Clarity! To keep your bookkeeping going after your ACE period ends on <strong>${esc(i.endDate)}</strong>, please finish setting up your monthly payment (bank account with no fee, or card).`,
+        ],
+        { label: "Finish setup", url: i.continueUrl },
+      ),
+      sms: sms(`Book Clarity: please finish setting up your monthly payment before ${i.endDate} so your service continues: ${i.continueUrl}`),
+    };
+  },
+
+  ownerAceAwaitingPm(i: { clientName: string; endDate: string; clientUrl: string }): Message {
+    return {
+      subject: `Follow up: ${i.clientName} is continuing but hasn't set up payment`,
+      html: html(
+        [
+          `<strong>${esc(i.clientName)}</strong> chose to continue, but their ACE period ended on ${esc(i.endDate)} and no payment method has been saved yet, so nothing is being billed.`,
+          `Please follow up with them.`,
+        ],
+        { label: "Open client", url: i.clientUrl },
+      ),
+      sms: sms(`Book Clarity portal: ${i.clientName} is continuing but has no payment method since ${i.endDate}. ${i.clientUrl}`),
     };
   },
 

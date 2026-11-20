@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { ghlConfigured, ghlSendMessage, ghlUpsertContact } from "@/ghl/client";
+import { looksLikeName } from "@/notify/templates";
 
 export const MAX_ATTEMPTS = 2;
 
@@ -34,6 +35,15 @@ async function claim(n: Notice): Promise<boolean> {
 
 /** Sends a notice through GHL (email and/or SMS). Never throws; always leaves a log row. */
 export async function sendNotice(n: Notice): Promise<SendResult> {
+  try {
+    return await sendNoticeInner(n);
+  } catch (e) {
+    console.error(`[notify] ${n.key} could not be recorded:`, (e as Error).message);
+    return "FAILED";
+  }
+}
+
+async function sendNoticeInner(n: Notice): Promise<SendResult> {
   if (!(await claim(n))) return "DUPLICATE";
   const finish = (status: "SENT" | "SKIPPED" | "FAILED", extra: { error?: string; channels?: string } = {}) =>
     db.notification.update({
@@ -47,6 +57,10 @@ export async function sendNotice(n: Notice): Promise<SendResult> {
       },
     });
 
+  if (process.env.NODE_ENV === "production" && !process.env.PORTAL_BASE_URL) {
+    await finish("SKIPPED", { error: "PORTAL_BASE_URL not set (links would be wrong)" });
+    return "SKIPPED";
+  }
   if (!ghlConfigured()) {
     await finish("SKIPPED", { error: "GHL not configured" });
     return "SKIPPED";
@@ -57,19 +71,35 @@ export async function sendNotice(n: Notice): Promise<SendResult> {
     return "SKIPPED";
   }
 
+  let contactId = n.to.ghlContactId ?? null;
   try {
-    let contactId = n.to.ghlContactId ?? null;
     if (!contactId) {
-      contactId = await ghlUpsertContact({ name: n.to.name, email: n.to.email, phone: n.to.phone });
+      // Never overwrite a contact's real name in GHL with a placeholder or an email address.
+      contactId = await ghlUpsertContact({ ...(looksLikeName(n.to.name) ? { name: n.to.name } : {}), email: n.to.email, phone: n.to.phone });
       if (n.clientId) await db.client.updateMany({ where: { id: n.clientId }, data: { ghlContactId: contactId } });
     }
-    if (channels.includes("email")) await ghlSendMessage({ contactId, type: "Email", subject: n.email!.subject, html: n.email!.html });
-    if (channels.includes("sms")) await ghlSendMessage({ contactId, type: "SMS", message: n.sms! });
-    await finish("SENT", { channels: channels.join(",") });
-    return "SENT";
   } catch (e) {
-    console.error(`[notify] ${n.key} failed:`, (e as Error).message);
-    await finish("FAILED", { error: (e as Error).message.slice(0, 500), channels: channels.join(",") });
+    await finish("FAILED", { error: `contact: ${(e as Error).message}`.slice(0, 500) });
     return "FAILED";
   }
+
+  // Each channel separately: if email went out but SMS failed, the notice counts as sent (no duplicate email on retry).
+  const ok: string[] = [];
+  const errors: string[] = [];
+  for (const ch of channels) {
+    try {
+      if (ch === "email") await ghlSendMessage({ contactId, type: "Email", subject: n.email!.subject, html: n.email!.html });
+      else await ghlSendMessage({ contactId, type: "SMS", message: n.sms! });
+      ok.push(ch);
+    } catch (e) {
+      errors.push(`${ch}: ${(e as Error).message}`);
+    }
+  }
+  if (ok.length > 0) {
+    await finish("SENT", { channels: ok.join(","), error: errors.length ? errors.join("; ").slice(0, 500) : undefined });
+    return "SENT";
+  }
+  console.error(`[notify] ${n.key} failed:`, errors.join("; "));
+  await finish("FAILED", { error: errors.join("; ").slice(0, 500), channels: channels.join(",") });
+  return "FAILED";
 }

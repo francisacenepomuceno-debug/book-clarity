@@ -24,41 +24,50 @@ export async function runAceNotices(now: Date = new Date()): Promise<{ clientNot
       acePrepaidUntil: { not: null },
       aceSlotId: { not: null },
       // `not: "ENDING"` alone would also drop clients with no decision yet (SQL NULL), i.e. most of them.
-      OR: [{ continuationDecision: null }, { continuationDecision: { not: "ENDING" } }],
+      AND: [
+        { OR: [{ continuationDecision: null }, { continuationDecision: { not: "ENDING" } }] },
+        { OR: [{ endedAt: null }, { endedAt: { gt: now } }] },
+      ],
     },
   });
   const owners = await db.user.findMany({ where: { role: { in: ["OWNER", "SUPER_ADMIN"] } } });
   let clientNotices = 0;
   let ownerAlerts = 0;
+  const to = (c: (typeof clients)[number]) => ({ name: c.name, email: c.email, phone: c.phone, ghlContactId: c.ghlContactId });
+  const continueUrl = (id: string) => `${baseUrl()}/continue/${continuationToken(id)}`;
+  const alertOwners = async (key: string, kind: string, t: { subject: string; html: string }) => {
+    for (const o of owners) {
+      await sendNotice({ key: `${key}:${o.id}`, kind, to: { name: o.name, email: o.email }, email: t });
+      ownerAlerts++;
+    }
+  };
+
   for (const c of clients) {
     const msLeft = c.acePrepaidUntil!.getTime() - now.getTime();
+    const continuing = c.continuationDecision === "CONTINUING";
     if (msLeft >= 0) {
-      if (c.clientAnswer === "YES" || c.continuationDecision === "CONTINUING") continue;
       const daysLeft = Math.ceil(msLeft / DAY);
+      if (continuing) {
+        // Said yes but no payment method yet (spec D6): remind them to finish setup from 14 days out.
+        if (daysLeft > 14) continue;
+        const t = templates.aceSetupReminder({ name: c.name, endDate: fmtDate(c.acePrepaidUntil), continueUrl: continueUrl(c.id) });
+        await sendNotice({ key: `ace-setup:${c.id}:14`, kind: "ace_setup_14", clientId: c.id, to: to(c), email: { subject: t.subject, html: t.html }, sms: t.sms });
+        clientNotices++;
+        continue;
+      }
+      if (c.clientAnswer === "YES") continue;
       // The latest notice that's due (a client added late gets one notice, not a burst).
       const due = [...CONTINUATION_REMINDER_DAYS].reverse().find((d) => daysLeft <= d);
       if (!due) continue;
-      const t = templates.aceProgramEnding({
-        name: c.name,
-        endDate: fmtDate(c.acePrepaidUntil),
-        daysLeft,
-        continueUrl: `${baseUrl()}/continue/${continuationToken(c.id)}`,
-      });
-      await sendNotice({
-        key: `ace-ending:${c.id}:${due}`,
-        kind: `ace_ending_${due}`,
-        clientId: c.id,
-        to: { name: c.name, email: c.email, phone: c.phone, ghlContactId: c.ghlContactId },
-        email: { subject: t.subject, html: t.html },
-        sms: t.sms,
-      });
+      const t = templates.aceProgramEnding({ name: c.name, endDate: fmtDate(c.acePrepaidUntil), daysLeft, continueUrl: continueUrl(c.id) });
+      await sendNotice({ key: `ace-ending:${c.id}:${due}`, kind: `ace_ending_${due}`, clientId: c.id, to: to(c), email: { subject: t.subject, html: t.html }, sms: t.sms });
       clientNotices++;
-    } else if (c.continuationDecision !== "CONTINUING") {
+    } else if (continuing) {
+      const t = templates.ownerAceAwaitingPm({ clientName: c.name, endDate: fmtDate(c.acePrepaidUntil), clientUrl: `${baseUrl()}/clients/${c.id}` });
+      await alertOwners(`ace-awaiting-pm:${c.id}`, "owner_ace_awaiting_pm", { subject: t.subject, html: t.html });
+    } else {
       const t = templates.ownerAceNoDecision({ clientName: c.name, endDate: fmtDate(c.acePrepaidUntil), clientUrl: `${baseUrl()}/clients/${c.id}` });
-      for (const o of owners) {
-        await sendNotice({ key: `ace-no-decision:${c.id}:${o.id}`, kind: "owner_ace_no_decision", to: { name: o.name, email: o.email }, email: { subject: t.subject, html: t.html } });
-        ownerAlerts++;
-      }
+      await alertOwners(`ace-no-decision:${c.id}`, "owner_ace_no_decision", { subject: t.subject, html: t.html });
     }
   }
   return { clientNotices, ownerAlerts };

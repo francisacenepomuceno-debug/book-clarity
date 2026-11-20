@@ -28,6 +28,8 @@ export type WebhookDeps = {
   /** Client notices: payment coming up (invoice.upcoming) and payment failed (day 0). */
   onUpcomingInvoice?: (inv: Stripe.Invoice) => Promise<void>;
   onPaymentFailedNotice?: (invoiceRowId: string) => Promise<void>;
+  /** Which Stripe invoice a payment intent pays (for ACH "processing"). */
+  getInvoiceIdForPaymentIntent?: (paymentIntentId: string) => Promise<string | null>;
 };
 
 /** An unfinished attempt older than this is assumed dead and may be retried. */
@@ -50,6 +52,7 @@ const HANDLED = new Set([
   "charge.refunded",
   "checkout.session.completed",
   "invoice.upcoming",
+  "payment_intent.processing",
 ]);
 
 /** Verified events only. Idempotent by event.id; a failed handler un-records the event so Stripe's retry runs. */
@@ -88,6 +91,13 @@ async function dispatch(event: Stripe.Event, deps: WebhookDeps): Promise<void> {
       const row = await upsertInvoiceFromStripe(obj as Stripe.Invoice, { failedNow: true });
       if (row?.clientId) await refreshClientStatus(row.clientId);
       if (row) await deps.onPaymentFailedNotice?.(row.id);
+      return;
+    }
+    case "payment_intent.processing": {
+      // A bank (ACH) payment is under way: hold reminders until it succeeds or fails.
+      const pi = obj as Stripe.PaymentIntent;
+      const stripeInvoiceId = await deps.getInvoiceIdForPaymentIntent?.(pi.id);
+      if (stripeInvoiceId) await db.invoice.updateMany({ where: { stripeInvoiceId }, data: { processingSince: new Date() } });
       return;
     }
     case "invoice.upcoming": {

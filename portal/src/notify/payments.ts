@@ -9,13 +9,16 @@ import { fmtDate } from "@/lib/format";
 import { idOf, subscriptionIdOf } from "@/stripe/lines";
 
 const DAY = 86400_000;
-export const FOLLOW_UP_DAYS = [3, 7, 14] as const;
+/** Day 0 is in the list so a day-0 notice that failed is retried by the daily run. */
+export const FOLLOW_UP_DAYS = [0, 3, 7, 14] as const;
 export const AT_RISK_DAYS = 21;
 export const baseUrl = () => process.env.PORTAL_BASE_URL ?? "http://localhost:3000";
 
 /** Payment reminders never go to ended clients or to ACE clients inside their prepaid period. */
-export function remindable(c: Pick<Client, "endedAt" | "acePrepaidUntil">, now: Date): boolean {
+export function remindable(c: Pick<Client, "type" | "endedAt" | "acePrepaidUntil">, now: Date): boolean {
   if (c.endedAt && c.endedAt <= now) return false;
+  // An ACE client without a prepaid date yet (e.g. imported, slot not filled in) is treated as prepaid.
+  if (c.type === "ACE" && !c.acePrepaidUntil) return false;
   if (c.acePrepaidUntil && c.acePrepaidUntil > now) return false;
   return true;
 }
@@ -41,6 +44,8 @@ export async function onUpcomingInvoice(inv: Stripe.Invoice, now: Date = new Dat
 async function sendFailed(invoiceRowId: string, day: 0 | 3 | 7 | 14, now: Date): Promise<void> {
   const inv = await db.invoice.findUnique({ where: { id: invoiceRowId } });
   if (!inv?.clientId || inv.status !== "open") return;
+  // A bank (ACH) payment is on its way: don't tell the client they still owe.
+  if (inv.processingSince) return;
   const client = await db.client.findUniqueOrThrow({ where: { id: inv.clientId } });
   if (!remindable(client, now)) return;
   const t = templates.paymentFailed({
@@ -66,7 +71,7 @@ export async function runPaymentReminders(now: Date = new Date()): Promise<{ fol
     const days = Math.floor((now.getTime() - inv.firstFailedAt!.getTime()) / DAY);
     // Only the latest step that's due, so a missed day never sends a burst of old reminders.
     const step = [...FOLLOW_UP_DAYS].reverse().find((d) => days >= d);
-    if (step) {
+    if (step !== undefined) {
       await sendFailed(inv.id, step, now);
       followUps++;
     }

@@ -87,6 +87,7 @@ model Client {
   aceSlotId             String?
   continuationDecision  String?
   clientAnswer          String?
+  continuationBy        String?
   clientAnsweredAt      DateTime?
   aceSetupSessionId     String?
   createdAt             DateTime     @default(now())
@@ -107,6 +108,7 @@ model Invoice {
   onboardingCents   Int         @default(0)
   refundedCents     Int         @default(0)
   refundedPackageCents Int      @default(0)
+  processingSince   DateTime?
   taxCents          Int         @default(0)
   seenRefundIds     String[]    @default([])
   totalCents        Int

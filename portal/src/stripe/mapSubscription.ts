@@ -8,6 +8,7 @@ export type LiveClientRow = {
   subscriptionId: string;
   name: string;
   email: string | null;
+  phone?: string | null;
   status: ClientStatus;
   packageName: string;
   sixMonthContract: boolean;
@@ -104,6 +105,7 @@ export function mapSubscription(
     subscriptionId: sub.id,
     name: customer?.name || customer?.email || "(no name)",
     email: customer?.email ?? null,
+    phone: customer?.phone ?? null,
     status,
     packageName: [...new Set(packages)].join(" + ") || "—",
     sixMonthContract: sixMonth,
