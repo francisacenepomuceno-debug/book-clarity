@@ -26,11 +26,29 @@ export default async function ContractPage({ params }: { params: Promise<{ onboa
           {c.countersignedAt ? (
             <p className="form-ok">Countersigned by {c.countersignedBy} on {fmtDate(c.countersignedAt)}. The fully signed copy was emailed to the client, the countersigner and the office copy address. <a href={`/contracts/${c.id}/pdf`}>Download PDF</a></p>
           ) : (
-            <CountersignButton onboardingId={c.id} />
+            <CountersignButton onboardingId={c.id} signerName={viewer.name} today={new Date().toLocaleDateString("en-US", { timeZone: process.env.BUSINESS_TZ ?? "America/New_York", dateStyle: "long" })} />
           )}
         </section>
         <section className="panel pad">
           <pre className="contract">{c.text}</pre>
+          {(c.signatureImage || c.countersignatureImage) && (
+            <div className="sig-images">
+              {c.signatureImage && (
+                <figure>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={c.signatureImage} alt={`Signature of ${c.signerName}`} />
+                  <figcaption>Client: {c.signerName} · {fmtDate(c.signedAt)}</figcaption>
+                </figure>
+              )}
+              {c.countersignatureImage && (
+                <figure>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={c.countersignatureImage} alt={`Signature of ${c.countersignedBy}`} />
+                  <figcaption>Book Clarity, LLC: {c.countersignedBy} · {fmtDate(c.countersignedAt)}</figcaption>
+                </figure>
+              )}
+            </div>
+          )}
         </section>
       </main>
     </>

@@ -7,6 +7,8 @@ import { baseUrl } from "@/notify/payments";
 import { getOnboardingSettings } from "@/settings/onboarding";
 import { contractCopyLink } from "@/onboarding/contractCopies";
 import type { ActionResult } from "@/billing/discounts";
+import { parseSignatureImage } from "@/domain/signature";
+import { sha256 } from "@/domain/contract";
 
 const TZ = process.env.BUSINESS_TZ ?? "America/New_York";
 const PENDING_LINE = "Awaiting countersignature by Book Clarity, LLC";
@@ -35,12 +37,14 @@ export async function countersignView(onboardingId: string) {
     contractVersion: o.contractVersion,
     countersignedAt: o.countersignedAt,
     countersignedBy: by?.name ?? null,
+    signatureImage: o.signatureImage,
+    countersignatureImage: o.countersignatureImage,
     text: o.countersignedAt && by ? executedText(o.signedText, by.name, fmtWhen(o.countersignedAt)) : o.signedText,
   };
 }
 
 /** Owners / Super Admin: countersign a client's agreement, then email the client the fully signed copy. */
-export async function countersign(onboardingId: string, now: Date = new Date()): Promise<ActionResult> {
+export async function countersign(onboardingId: string, now: Date = new Date(), drawn?: string | null): Promise<ActionResult> {
   let actor;
   try {
     actor = await requirePermission("ace.manage");
@@ -48,13 +52,20 @@ export async function countersign(onboardingId: string, now: Date = new Date()):
     if (e instanceof ForbiddenError) return { ok: false, error: "Only Owners can countersign agreements." };
     throw e;
   }
+  // A drawn countersignature is optional: without one, the countersigner's name is used (as before).
+  let countersignatureImage: string | null = null;
+  if (drawn !== undefined && drawn !== null) {
+    const sig = parseSignatureImage(drawn);
+    if (!sig.ok) return { ok: false, error: sig.error };
+    countersignatureImage = sig.image;
+  }
   const done = await db.onboarding.updateMany({
     where: { id: onboardingId, signedAt: { not: null }, countersignedAt: null },
-    data: { countersignedAt: now, countersignedById: actor.id },
+    data: { countersignedAt: now, countersignedById: actor.id, countersignatureImage },
   });
   if (done.count !== 1) return { ok: false, error: "This agreement isn't waiting for a countersignature." };
   const o = await db.onboarding.findUniqueOrThrow({ where: { id: onboardingId }, include: { client: true } });
-  await writeAudit({ actorId: actor.id, action: "contract_countersigned", entity: "Onboarding", entityId: o.id, after: { signedHash: o.signedHash } });
+  await writeAudit({ actorId: actor.id, action: "contract_countersigned", entity: "Onboarding", entityId: o.id, after: { signedHash: o.signedHash, signature: countersignatureImage ? { drawn: true, hash: sha256(countersignatureImage) } : { typed: true } } });
   const text = executedText(o.signedText ?? "", actor.name, fmtWhen(now));
   const downloadUrl = contractCopyLink(o.id, baseUrl());
   // The fully signed copy goes to both parties and to the office copy address (Settings → Onboarding).

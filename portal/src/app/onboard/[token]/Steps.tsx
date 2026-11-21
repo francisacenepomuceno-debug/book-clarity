@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { isShown, type IntakeQuestion } from "@/domain/intake";
+import { SignaturePad, SignMethod } from "@/app/SignaturePad";
 import { callBookedAction, detailsAction, intakeAction, packageAction, signAction, type StepResult } from "./actions";
 
 const Err = ({ s }: { s: StepResult }) => (s.error ? <p className="form-error">{s.error}</p> : null);
@@ -49,7 +50,7 @@ export function DetailsStep(p: { token: string; initial: Record<string, string> 
   );
 }
 
-export function SignStep(p: { token: string; signerName: string; quickbooksOptions: string[] }) {
+export function SignStep(p: { token: string; signerName: string; quickbooksOptions: string[]; today: string }) {
   const [s, action, pending] = useActionState(signAction, {});
   return (
     <form action={action} className="stack">
@@ -64,8 +65,17 @@ export function SignStep(p: { token: string; signerName: string; quickbooksOptio
           ))}
         </fieldset>
       )}
-      <label>Type your full name to sign ({p.signerName})<input name="signerName" required autoComplete="off" /></label>
-      <p className="muted">By typing your name and clicking Sign, you are signing this agreement electronically. We record the date, time and your IP address.</p>
+      <SignMethod>
+        {(mode) =>
+          mode === "draw" ? (
+            <SignaturePad name="signatureImage" label={`Signature of ${p.signerName}`} />
+          ) : (
+            <label>Type your full name to sign ({p.signerName})<input name="signerName" required autoComplete="off" /></label>
+          )
+        }
+      </SignMethod>
+      <p className="sign-date"><strong>Date:</strong> {p.today} <span className="muted">(added automatically when you sign)</span></p>
+      <p className="muted">By signing and clicking Sign agreement, you are signing this agreement electronically. We record the date, time and your IP address.</p>
       <button disabled={pending}>Sign agreement</button>
       <Err s={s} />
     </form>

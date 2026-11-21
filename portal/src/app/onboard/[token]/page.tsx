@@ -57,7 +57,7 @@ export default async function OnboardPage({ params }: { params: Promise<{ token:
       <Shell step={s} ace={ace} waived={waived}>
         <p>Please read your agreement, then sign at the bottom.</p>
         <pre className="contract">{text}</pre>
-        <SignStep token={token} signerName={p.values.signer_name} quickbooksOptions={p.quickbooksOptions} />
+        <SignStep token={token} signerName={p.values.signer_name} quickbooksOptions={p.quickbooksOptions} today={new Date().toLocaleDateString("en-US", { timeZone: process.env.BUSINESS_TZ ?? "America/New_York", dateStyle: "long" })} />
       </Shell>
     );
   }

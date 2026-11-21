@@ -4,6 +4,7 @@ import { countersign } from "@/onboarding/countersign";
 import { contractCopyLink, executedContractPdf, signedContracts } from "@/onboarding/contractCopies";
 import { saveOnboardingSettings, getOnboardingSettings } from "@/settings/onboarding";
 import { resetDb } from "../helpers/db";
+import { scribblePng } from "../helpers/png";
 
 const ghl = vi.hoisted(() => ({ upsert: vi.fn(), send: vi.fn() }));
 vi.mock("@/ghl/client", () => ({ ghlConfigured: () => true, ghlUpsertContact: ghl.upsert, ghlSendMessage: ghl.send, GhlError: class extends Error {} }));
@@ -65,6 +66,22 @@ describe("fully signed copies", () => {
     expect(pdf!.lines.join("\n")).toMatch(/Signed electronically by Jose Owner for Book Clarity, LLC/);
     expect(pdf!.lines.join("\n")).toMatch(/IP 203\.0\.113\.9/);
     expect(pdf!.lines.join("\n")).toMatch(/abc123/);
+  });
+
+  it("drawn signatures (client and Jose) are stored and drawn into the PDF; a blank pad can't countersign", async () => {
+    const o = await signed();
+    const clientSig = scribblePng(300, 100, 3);
+    await db.onboarding.update({ where: { id: o.id }, data: { signatureImage: clientSig } });
+    expect(await countersign(o.id, now, "")).toEqual({ ok: false, error: "Please draw your signature in the box." });
+    expect((await db.onboarding.findUniqueOrThrow({ where: { id: o.id } })).countersignedAt).toBeNull();
+    const joseSig = scribblePng(300, 100, 11);
+    expect(await countersign(o.id, now, joseSig)).toEqual({ ok: true });
+    expect((await db.onboarding.findUniqueOrThrow({ where: { id: o.id } })).countersignatureImage).toBe(joseSig);
+    const pdf = await executedContractPdf(o.id);
+    const raw = Buffer.from(pdf!.bytes).toString("latin1");
+    expect(raw.match(/\/Subtype \/Image/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(pdf!.lines.join("\n")).toMatch(/Jane Doe \(drawn signature\)/);
+    expect(pdf!.lines.join("\n")).toMatch(/Jose Owner \(drawn signature\)/);
   });
 
   it("lists every signed agreement for Owners, newest first; Admins can't", async () => {

@@ -10,6 +10,7 @@ import { templates } from "@/notify/templates";
 import { baseUrl } from "@/notify/payments";
 import { formatUsd } from "@/lib/money";
 import { writeAudit } from "@/audit/log";
+import { parseSignatureImage } from "@/domain/signature";
 import type { ActionResult } from "@/billing/discounts";
 
 const TZ = process.env.BUSINESS_TZ ?? "America/New_York";
@@ -109,7 +110,8 @@ export async function contractPreview(l: Loaded, now: Date = new Date()) {
   return { ...c, values, quickbooksOptions: choices };
 }
 
-export type SignInput = { signerName: string; confirmDetails: boolean; agreeAutopay: boolean; quickbooks: number | null };
+/** `signatureImage` set: the client drew their signature (and needn't type their name). Otherwise they typed it. */
+export type SignInput = { signerName: string; confirmDetails: boolean; agreeAutopay: boolean; quickbooks: number | null; signatureImage?: string | null };
 
 export async function signContract(token: string, s: SignInput, ip: string, now: Date = new Date()): Promise<ActionResult> {
   const l = await at(token, "contract");
@@ -120,9 +122,16 @@ export async function signContract(token: string, s: SignInput, ip: string, now:
   if (preview.quickbooksOptions.length && (s.quickbooks == null || !preview.quickbooksOptions[s.quickbooks])) {
     return { ok: false, error: "Please choose a QuickBooks option." };
   }
-  const expected = preview.values.signer_name.trim().toLowerCase().replace(/\s+/g, " ");
-  if (s.signerName.trim().toLowerCase().replace(/\s+/g, " ") !== expected) {
-    return { ok: false, error: `Please type your full name exactly as entered: ${preview.values.signer_name}` };
+  let signatureImage: string | null = null;
+  if (s.signatureImage !== undefined && s.signatureImage !== null) {
+    const sig = parseSignatureImage(s.signatureImage);
+    if (!sig.ok) return { ok: false, error: sig.error };
+    signatureImage = sig.image;
+  } else {
+    const expected = preview.values.signer_name.trim().toLowerCase().replace(/\s+/g, " ");
+    if (s.signerName.trim().toLowerCase().replace(/\s+/g, " ") !== expected) {
+      return { ok: false, error: `Please type your full name exactly as entered: ${preview.values.signer_name}` };
+    }
   }
   const { text, missing } = renderContract(preview.template, preview.values, {
     checks: { confirm_details: true, agree_autopay: true },
@@ -143,11 +152,12 @@ export async function signContract(token: string, s: SignInput, ip: string, now:
       signedHash: sha256(text),
       contractVersion: preview.version,
       quickbooks: s.quickbooks != null ? preview.quickbooksOptions[s.quickbooks] ?? null : null,
+      signatureImage,
     },
     now,
   );
   if (!ok) return { ok: false, error: "This agreement was already signed." };
-  await writeAudit({ actorId: null, action: "contract_signed", entity: "Onboarding", entityId: l.onboarding.id, after: { version: preview.version, hash: sha256(text), ip } });
+  await writeAudit({ actorId: null, action: "contract_signed", entity: "Onboarding", entityId: l.onboarding.id, after: { version: preview.version, hash: sha256(text), ip, signature: signatureImage ? { drawn: true, hash: sha256(signatureImage) } : { typed: true } } });
 
   const signer = await getCountersigner();
   if (signer) {

@@ -5,6 +5,7 @@ import { onboardingLink } from "@/onboarding/start";
 import { choosePackage, confirmCallBooked, loadOnboarding, saveDetails, saveIntake, signContract } from "@/onboarding/steps";
 import { parseIntakeQuestions, DEFAULT_INTAKE_QUESTIONS } from "@/settings/onboarding";
 import { resetDb } from "../helpers/db";
+import { blankPng, scribblePng } from "../helpers/png";
 
 const ghl = vi.hoisted(() => ({ upsert: vi.fn(), send: vi.fn() }));
 vi.mock("@/ghl/client", () => ({ ghlConfigured: () => true, ghlUpsertContact: ghl.upsert, ghlSendMessage: ghl.send, GhlError: class extends Error {} }));
@@ -103,6 +104,29 @@ describe("client onboarding steps", () => {
     await saveDetails(token, details, now);
     await signContract(token, sign, "ip", now);
     expect((await loadOnboarding(token)).step).toBe("intake");
+  });
+
+  it("a drawn signature signs without typing the name, and is stored with the date", async () => {
+    const id = await setup("ACE");
+    await saveDetails(token, details, now);
+    // An untouched pad doesn't sign.
+    expect(await signContract(token, { ...sign, signerName: "", signatureImage: "" }, "ip", now)).toEqual({ ok: false, error: "Please draw your signature in the box." });
+    expect(await signContract(token, { ...sign, signerName: "", signatureImage: blankPng() }, "ip", now)).toMatchObject({ ok: false });
+    const img = scribblePng();
+    expect(await signContract(token, { ...sign, signerName: "", signatureImage: img }, "ip", now)).toEqual({ ok: true });
+    const o = await db.onboarding.findUniqueOrThrow({ where: { id } });
+    expect(o.signatureImage).toBe(img);
+    expect(o.signedAt).toEqual(now);
+    expect(o.signedText).toMatch(/Signed electronically by Jane Doe on November 20, 2026/);
+    const audit = await db.auditLog.findFirstOrThrow({ where: { action: "contract_signed" } });
+    expect((audit.after as { signature: unknown }).signature).toEqual({ drawn: true, hash: createHash("sha256").update(img).digest("hex") });
+  });
+
+  it("typing the name still works, and stores no image", async () => {
+    const id = await setup("ACE");
+    await saveDetails(token, details, now);
+    expect(await signContract(token, { ...sign, signatureImage: null }, "ip", now)).toEqual({ ok: true });
+    expect((await db.onboarding.findUniqueOrThrow({ where: { id } })).signatureImage).toBeNull();
   });
 
   it("intake defaults parse", () => {

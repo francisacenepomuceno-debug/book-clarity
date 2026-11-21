@@ -1,4 +1,5 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage } from "pdf-lib";
+import { signatureBytes } from "@/domain/signature";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/auth/permissions";
 import { signLink, verifyLink } from "@/lib/links";
@@ -27,8 +28,8 @@ export async function executedContractPdf(onboardingId: string): Promise<{ bytes
   const record = [
     "",
     "Signing record",
-    `Client: signed electronically by ${o.signerName} on ${when(o.signedAt)}, from IP ${o.signerIp ?? "unknown"}.`,
-    `Book Clarity, LLC: countersigned electronically by ${countersigner} on ${when(o.countersignedAt)}.`,
+    `Client: signed electronically by ${o.signerName} (${o.signatureImage ? "drawn signature" : "typed name"}) on ${when(o.signedAt)}, from IP ${o.signerIp ?? "unknown"}.`,
+    `Book Clarity, LLC: countersigned electronically by ${countersigner} (${o.countersignatureImage ? "drawn signature" : "typed name"}) on ${when(o.countersignedAt)}.`,
     `Contract version ${o.contractVersion ?? "—"}. SHA-256 fingerprint of the text the client signed: ${o.signedHash ?? "—"}`,
   ];
   const lines = [...body.split("\n"), ...record];
@@ -64,7 +65,23 @@ export async function executedContractPdf(onboardingId: string): Promise<{ bytes
   y -= 26;
   page.drawText(ansi(`${o.client.name}${o.client.package ? ` · ${o.client.package.name}` : ""}`), { x: M, y: y - size, size, font, color: rgb(0.357, 0.396, 0.451) });
   y -= 24;
-  for (const l of lines) draw(l, l === "Signing record" ? bold : font);
+  // Drawn signatures go right under their "Signed electronically by …" lines.
+  const clientSig = o.signatureImage ? await doc.embedPng(signatureBytes(o.signatureImage)) : null;
+  const providerSig = o.countersignatureImage ? await doc.embedPng(signatureBytes(o.countersignatureImage)) : null;
+  const drawSig = (img: PDFImage) => {
+    const h = 48;
+    const w = Math.min(220, (img.width / img.height) * h);
+    const hh = (w / ((img.width / img.height) * h)) * h;
+    if (y - hh - 6 < M) { page = doc.addPage([W, H]); y = H - M; }
+    page.drawImage(img, { x: M, y: y - hh, width: w, height: hh });
+    page.drawLine({ start: { x: M, y: y - hh - 2 }, end: { x: M + 220, y: y - hh - 2 }, thickness: 0.6, color: ink });
+    y -= hh + 10;
+  };
+  for (const l of lines) {
+    draw(l, l === "Signing record" ? bold : font);
+    if (clientSig && l.startsWith(`Signed electronically by ${o.signerName} on `)) drawSig(clientSig);
+    if (providerSig && l.startsWith(`Signed electronically by ${countersigner} for Book Clarity, LLC on `)) drawSig(providerSig);
+  }
   const safe = o.client.name.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "client";
   return { bytes: await doc.save(), filename: `Book-Clarity-agreement-${safe}-${o.countersignedAt.toISOString().slice(0, 10)}.pdf`, lines };
 }
