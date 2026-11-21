@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { nextStep, STEP_LABEL } from "@/domain/onboarding";
+import { nextStep, stepLabel } from "@/domain/onboarding";
 import { onboardingLink } from "@/onboarding/start";
 import { getCountersigner } from "@/settings/onboarding";
 import { sendNotice } from "@/notify/send";
@@ -21,7 +21,7 @@ export async function runOnboardingReminders(now: Date = new Date()): Promise<{ 
   for (const o of stuck) {
     const step = nextStep(o, o.client.type);
     if (step === "done") continue;
-    const t = templates.onboardingNudge({ name: o.client.name, step: STEP_LABEL[step].toLowerCase(), url: onboardingLink(o.id) });
+    const t = templates.onboardingNudge({ name: o.client.name, step: stepLabel(step, o.onboardingFeeCents === 0).toLowerCase(), url: onboardingLink(o.id) });
     const r = await sendNotice({ key: `onboarding-nudge:${o.id}:${step}`, kind: "onboarding-nudge", clientId: o.clientId, to: { name: o.client.name, email: o.client.email, phone: o.client.phone, ghlContactId: o.client.ghlContactId }, email: t, sms: t.sms });
     if (r === "SENT") nudges++;
   }

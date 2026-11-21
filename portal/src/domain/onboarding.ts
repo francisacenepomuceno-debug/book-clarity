@@ -33,3 +33,8 @@ export function nextStep(o: Progress, type: "DIRECT" | "ACE"): OnboardingStep {
   if (!o.callBookedAt) return "call";
   return "done";
 }
+
+/** The step's name for the client and staff; with a waived fee the payment step only sets up autopay. */
+export function stepLabel(step: OnboardingStep, feeWaived: boolean): string {
+  return step === "payment" && feeWaived ? "Setting up autopay" : STEP_LABEL[step];
+}
