@@ -172,7 +172,7 @@ export function toCsv(tables: Table[]): string {
 }
 
 /** The standard PDF fonts only cover Windows-1252; swap common Unicode punctuation for safe equivalents. */
-const ansi = (s: string) =>
+export const ansi = (s: string) =>
   s.replace(/[−–—]/g, "-").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/•/g, "*").replace(/…/g, "...").replace(/[^\x20-\x7e\xa0-\xff]/g, "?");
 
 function fit(text: string, font: PDFFont, size: number, width: number): string {

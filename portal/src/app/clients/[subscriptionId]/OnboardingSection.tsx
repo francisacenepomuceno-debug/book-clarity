@@ -15,7 +15,7 @@ export async function OnboardingSection({ clientId, role }: { clientId: string; 
       <h3>Onboarding</h3>
       <p>
         {step === "done" ? <>Done. Call booked {fmtDate(o.callBookedAt)}.</> : <>Current step: {STEP_LABEL[step]}.</>}
-        {o.signedAt && <> · Agreement signed {fmtDate(o.signedAt)} by {o.signerName}{o.countersignedAt ? ", countersigned" : ", awaiting countersignature"}{can(role, "ace.manage") && <> (<a href={`/contracts/${o.id}`}>view</a>)</>}</>}
+        {o.signedAt && <> · Agreement signed {fmtDate(o.signedAt)} by {o.signerName}{o.countersignedAt ? ", countersigned" : ", awaiting countersignature"}{can(role, "ace.manage") && <> (<a href={`/contracts/${o.id}`}>view</a>{o.countersignedAt && <> · <a href={`/contracts/${o.id}/pdf`}>download PDF</a></>})</>}</>}
         {o.feePaidAt && <> · Onboarding fee paid {fmtDate(o.feePaidAt)}</>}
         {o.quickbooks && <> · QuickBooks: {o.quickbooks}</>}
       </p>

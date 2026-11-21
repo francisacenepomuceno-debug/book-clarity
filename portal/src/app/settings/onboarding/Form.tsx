@@ -14,6 +14,9 @@ export function OnboardingSettingsForm(p: { settings: OnboardingSettings; owners
           {p.owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
         </select>
       </label>
+      <label>Send a copy of every fully signed agreement to (leave empty for none)
+        <input name="contractCopyEmail" type="email" defaultValue={p.settings.contractCopyEmail} placeholder="info@book-clarity.com" />
+      </label>
       <label>Onboarding call booking link (GHL calendar)
         <input name="calendarUrl" defaultValue={p.settings.calendarUrl} placeholder="https://…" />
       </label>

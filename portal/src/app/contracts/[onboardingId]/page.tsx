@@ -24,7 +24,7 @@ export default async function ContractPage({ params }: { params: Promise<{ onboa
             <br /><span className="muted">Fingerprint (SHA-256) of the signed text: <code>{c.signedHash}</code></span>
           </p>
           {c.countersignedAt ? (
-            <p className="form-ok">Countersigned by {c.countersignedBy} on {fmtDate(c.countersignedAt)}. The client was emailed the fully signed copy.</p>
+            <p className="form-ok">Countersigned by {c.countersignedBy} on {fmtDate(c.countersignedAt)}. The fully signed copy was emailed to the client, the countersigner and the office copy address. <a href={`/contracts/${c.id}/pdf`}>Download PDF</a></p>
           ) : (
             <CountersignButton onboardingId={c.id} />
           )}

@@ -63,7 +63,7 @@ export default async function OnboardingPage() {
       <main>
         <p><a href="/">← All clients</a></p>
         <h2>Onboarding</h2>
-        {can(viewer.role, "ace.manage") && <p><a href="/settings/onboarding">Onboarding settings</a> (questionnaire, countersigner, booking link, suspension)</p>}
+        {can(viewer.role, "ace.manage") && <p><a href="/contracts">Signed agreements</a> · <a href="/settings/onboarding">Onboarding settings</a> (questionnaire, countersigner, booking link, signed-copy email, suspension)</p>}
         <section className="panel pad">
           <h3>New client</h3>
           <p className="muted">Creates the client and emails (and texts, if a phone is given) their onboarding link: package, details, agreement, onboarding fee, questionnaire, and booking the call.</p>
