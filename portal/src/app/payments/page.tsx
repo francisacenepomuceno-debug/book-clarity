@@ -10,7 +10,7 @@ const TZ = process.env.BUSINESS_TZ ?? "America/New_York";
 const ORDER: PaymentStatus[] = ["FAILED", "SUSPENDED", "PROCESSING", "OPEN", "PAID", "PREPAID_ACE"];
 const BADGE: Record<PaymentStatus, string> = { PAID: "CURRENT", FAILED: "PAST_DUE", SUSPENDED: "SUSPENDED", PROCESSING: "UNPAID", OPEN: "UNPAID", PREPAID_ACE: "PREPAID_ACE" };
 
-export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ month?: string; status?: string }> }) {
+export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ month?: string; status?: string; type?: string }> }) {
   const viewer = await requirePermission("payments.view");
   const q = await searchParams;
   const now = new Date();
@@ -21,13 +21,18 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   } catch {
     data = await monthlyPayments(thisMonth.key, viewer.role);
   }
-  const { month, rows, counts } = data;
+  const { month } = data;
+  const type: "ALL" | "DIRECT" | "ACE" = q.type === "DIRECT" || q.type === "ACE" ? q.type : "ALL";
+  const typeCount = { ALL: data.rows.length, DIRECT: data.rows.filter((r) => r.type !== "ACE").length, ACE: data.rows.filter((r) => r.type === "ACE").length };
+  const rows = type === "ALL" ? data.rows : data.rows.filter((r) => (type === "ACE" ? r.type === "ACE" : r.type !== "ACE"));
+  const counts: Partial<Record<PaymentStatus, number>> = {};
+  for (const r of rows) counts[r.status] = (counts[r.status] ?? 0) + 1;
   const prev = previous(month);
   const next = periodOf("month", month.end, TZ);
   const amounts = can(viewer.role, "payments.viewAmounts");
   const filter = ORDER.includes(q.status as PaymentStatus) ? (q.status as PaymentStatus) : null;
   const shown = filter ? rows.filter((r) => r.status === filter) : rows;
-  const link = (m: string, s?: string | null) => `/payments?month=${m}${s ? `&status=${s}` : ""}`;
+  const link = (m: string, s?: string | null, ty: string = type) => `/payments?month=${m}${s ? `&status=${s}` : ""}${ty !== "ALL" ? `&type=${ty}` : ""}`;
 
   return (
     <>
@@ -43,6 +48,13 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
           </div>
           <span className="muted">Monthly bills whose billing period starts this month.</span>
         </section>
+        <nav className="tabs type-tabs" aria-label="Client type">
+          {([["ALL", "All clients"], ["DIRECT", "Direct"], ["ACE", "ACE"]] as const).map(([k, label]) => (
+            <a key={k} href={link(month.key, null, k)} className={type === k ? "active" : ""}>
+              {label} <span className="tab-count">{typeCount[k]}</span>
+            </a>
+          ))}
+        </nav>
         <section className="kpis">
           <a href={link(month.key)} className={`kpi ${!filter ? "active" : ""}`}><div className="label">All</div><div className="value">{rows.length}</div></a>
           {ORDER.map((s) => (

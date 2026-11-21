@@ -21,6 +21,7 @@ export default async function ImportPage() {
             <li><strong>executive_1, rate_1, executive_2, rate_2</strong>: who earns and their % (e.g. Jose 5%, Albert 5%)</li>
             <li><strong>months_already_earned</strong>: commission months already earned or paid by hand, up to the "settled up to" date below. Direct clients: 0–12. ACE clients: only the paid months after the six ACE prepaid (0–6).</li>
             <li><strong>effective_from</strong>: optional date the split started (default: always)</li>
+            <li><strong>contact_email, phone, package</strong>: only to add a client who isn't in the portal yet (tick "Add clients" below). The client column is then their name.</li>
             <li><strong>ace_batch, ace_start_date</strong>: ACE clients only: the batch (its note or purchase date) and the client's start date. Enter past batches first on the ACE page and tick "Historical". A client already on Stripe autopay can only go into a historical batch.</li>
           </ul>
           <p><a download="commission-import-template.csv" href={`data:text/csv;charset=utf-8,${encodeURIComponent(IMPORT_TEMPLATE)}`}>Download the template</a></p>

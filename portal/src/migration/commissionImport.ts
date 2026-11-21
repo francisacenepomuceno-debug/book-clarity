@@ -24,6 +24,10 @@ const ALIASES: Record<string, string> = {
   effective_from: "effective_from", "effective from": "effective_from",
   ace_batch: "ace_batch", "ace batch": "ace_batch", batch: "ace_batch",
   ace_start_date: "ace_start_date", "ace start date": "ace_start_date", "start date": "ace_start_date",
+  // Only used to add a client who isn't in the portal yet:
+  contact_email: "contact_email", "contact email": "contact_email",
+  phone: "phone", "phone number": "phone",
+  package: "package", "plan package": "package", plan: "package",
 };
 
 /** RFC 4180 CSV → rows keyed by canonical column names (header aliases accepted, unknown columns ignored). */
@@ -72,7 +76,10 @@ function percent(v: string | undefined): number | null {
 
 export type ReadyRow = {
   line: number;
+  /** Empty for a client this import will add (see `create`). */
   clientId: string;
+  /** A client who isn't in the portal yet, added on Apply. */
+  create?: { name: string; email: string | null; phone: string | null; packageId: string | null; type: "DIRECT" | "ACE" };
   clientName: string;
   type: "DIRECT" | "ACE" | null;
   shares: { executiveName: string; ratePercent: number }[];
@@ -102,12 +109,13 @@ const isRealDate = (s: string) => {
 /** Owners: checks every row and matches it to a client. Nothing is changed. */
 export async function planImport(
   text: string,
-  opts: { createMissingExecutives: boolean; settledThrough?: string },
+  opts: { createMissingExecutives: boolean; settledThrough?: string; createMissingClients?: boolean },
 ): Promise<{ ready: ReadyRow[]; problems: Problem[]; error?: string }> {
   await requirePermission("ace.manage");
   if (opts.settledThrough && !isRealDate(opts.settledThrough)) return { ready: [], problems: [], error: "The 'settled through' date must be a real date (YYYY-MM-DD)." };
   const settledThrough = opts.settledThrough ? startOfDayIn(opts.settledThrough, TZ) : null;
   const rows = parseCsv(text);
+  const packages = await db.package.findMany();
   const [clients, execs, batches, freeSlots, paidInvoices, earnedInvoices] = await Promise.all([
     db.client.findMany({ include: { package: true } }),
     db.executive.findMany(),
@@ -135,9 +143,31 @@ export async function planImport(
       : key.includes("@")
         ? clients.filter((c) => c.email?.toLowerCase() === key.toLowerCase())
         : clients.filter((c) => norm(c.name) === norm(key));
-    if (matches.length === 0) return fail("No client matches this name, email or Stripe customer ID. Fix it on the client page or in the sheet.");
     if (matches.length > 1) return fail(`More than one client matches "${key}". Use their email or Stripe customer ID (cus_…) instead.`);
-    const client = matches[0];
+    let create: ReadyRow["create"];
+    if (matches.length === 0) {
+      if (!opts.createMissingClients) return fail("No client matches this name, email or Stripe customer ID. Fix it on the client page or in the sheet.");
+      // Add them: the client column is their name; type and package say what they're on.
+      if (key.startsWith("cus_") || key.includes("@")) return fail("To add a new client, put their name in the client column (and the email in contact_email).");
+      const t = (r.type ?? "").toLowerCase();
+      if (t !== "direct" && t !== "ace") return fail("To add a new client, give their type (Direct or ACE).");
+      const pkg = r.package ? packages.find((p) => norm(p.name) === norm(r.package!)) : null;
+      if (r.package && !pkg) return fail(`No package is called "${r.package}". Use a name from the Packages page.`);
+      if (t === "ace" && !pkg) return fail("An ACE client needs their package.");
+      const email = r.contact_email?.trim().toLowerCase() || null;
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail(`"${r.contact_email}" isn't a valid email.`);
+      create = { name: key.trim().replace(/\s+/g, " "), email, phone: r.phone?.trim() || null, packageId: pkg?.id ?? null, type: t === "ace" ? "ACE" : "DIRECT" };
+    }
+    const client = matches[0] ?? {
+      id: `new:${line}`,
+      name: create!.name,
+      type: create!.type,
+      packageId: create!.packageId,
+      package: packages.find((p) => p.id === create!.packageId) ?? null,
+      aceSlotId: null,
+      stripeSubscriptionId: null,
+      commissionMonthsBeforePortal: 0,
+    };
 
     const typeRaw = (r.type ?? "").toLowerCase();
     const type = typeRaw === "" ? null : typeRaw === "direct" ? "DIRECT" : typeRaw === "ace" ? "ACE" : undefined;
@@ -212,6 +242,7 @@ export async function planImport(
 
     ready.push({
       line,
+      create,
       willPost,
       aceLumpSum: !!ace && !ace.historical,
       settledThrough,
@@ -233,13 +264,20 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
   const actor = await requirePermission("ace.manage");
   const failed: Problem[] = [];
   let applied = 0;
-  for (const r of rows) {
+  for (let r of rows) {
     const fail = (error: string) => failed.push({ line: r.line, client: r.clientName, error });
     for (const name of r.newExecutives) {
       if (!(await db.executive.findFirst({ where: { name: { equals: name, mode: "insensitive" } } }))) {
         const e = await db.executive.create({ data: { name } });
         await writeAudit({ actorId: actor.id, action: "executive_added", entity: "Executive", entityId: e.id, after: { name, via: "import" } });
       }
+    }
+    if (r.create) {
+      // Added once: a later run matches them by name instead.
+      const existing = await db.client.findFirst({ where: { name: { equals: r.create.name, mode: "insensitive" } } });
+      const c = existing ?? (await db.client.create({ data: { name: r.create.name, email: r.create.email, phone: r.create.phone, packageId: r.create.packageId, type: r.create.type, status: r.create.type === "ACE" ? "PREPAID_ACE" : "ONBOARDING" } }));
+      if (!existing) await writeAudit({ actorId: actor.id, action: "client_added_by_import", entity: "Client", entityId: c.id, after: r.create });
+      r = { ...r, clientId: c.id };
     }
     const previousType = (await db.client.findUniqueOrThrow({ where: { id: r.clientId }, select: { type: true } })).type;
     // Type first: the commission window (12 Direct, 6 ACE) depends on it. Restored if the split is refused.

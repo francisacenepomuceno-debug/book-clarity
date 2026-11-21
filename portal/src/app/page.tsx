@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 
 const FILTERS: { key: ClientStatus | "ALL"; label: string }[] = [
-  { key: "ALL", label: "All clients" },
+  { key: "ALL", label: "Total" },
   { key: "CURRENT", label: STATUS_LABEL.CURRENT },
   { key: "UNPAID", label: STATUS_LABEL.UNPAID },
   { key: "PAST_DUE", label: STATUS_LABEL.PAST_DUE },
@@ -57,11 +57,21 @@ async function OwnerPanels() {
   );
 }
 
-export default async function Dashboard({ searchParams }: { searchParams: Promise<{ status?: string; refresh?: string }> }) {
+export default async function Dashboard({ searchParams }: { searchParams: Promise<{ status?: string; refresh?: string; type?: string }> }) {
   const viewer = await requirePermission("clients.view");
   const money = can(viewer.role, "clients.viewFinancials");
   const owner = can(viewer.role, "reports.view");
-  const { status = "ALL", refresh } = await searchParams;
+  const { status = "ALL", refresh, type: typeParam } = await searchParams;
+  const type: "ALL" | "DIRECT" | "ACE" = typeParam === "DIRECT" || typeParam === "ACE" ? typeParam : "ALL";
+  const q = (o: { status?: string; type?: string }) => {
+    const p = new URLSearchParams();
+    const s = o.status ?? status;
+    const ty = o.type ?? type;
+    if (s !== "ALL") p.set("status", s);
+    if (ty !== "ALL") p.set("type", ty);
+    const str = p.toString();
+    return str ? `/?${str}` : "/";
+  };
 
   let snap;
   try {
@@ -77,7 +87,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     );
   }
 
-  const rows = [...(await withClientTypes(snap.rows)), ...(await aceDashboardRows())].map((r) => scopeRow(r, viewer.role));
+  const allRows = [...(await withClientTypes(snap.rows)), ...(await aceDashboardRows())].map((r) => scopeRow(r, viewer.role));
+  const typeCount = { ALL: allRows.length, DIRECT: allRows.filter((r) => r.clientType !== "ACE").length, ACE: allRows.filter((r) => r.clientType === "ACE").length };
+  // Direct and ACE clients are shown separately (everything below follows the chosen type).
+  const rows = type === "ALL" ? allRows : allRows.filter((r) => (type === "ACE" ? r.clientType === "ACE" : r.clientType !== "ACE"));
   const count = (s: ClientStatus) => rows.filter((r) => r.status === s).length;
   const billing = rows.filter((r) => r.status !== "PAUSED" && r.status !== "ENDED");
   const shown = (status === "ALL" ? rows : rows.filter((r) => r.status === status)).sort(
@@ -86,11 +99,18 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <PortalHeader role={viewer.role} viewerName={viewer.name} livemode={snap.livemode} fetchedAt={snap.fetchedAt} refreshHref={`/?status=${status}&refresh=1`} />
+      <PortalHeader role={viewer.role} viewerName={viewer.name} livemode={snap.livemode} fetchedAt={snap.fetchedAt} refreshHref={`${q({})}${q({}).includes("?") ? "&" : "?"}refresh=1`} />
       <main>
+        <nav className="tabs type-tabs" aria-label="Client type">
+          {([["ALL", "All clients"], ["DIRECT", "Direct"], ["ACE", "ACE"]] as const).map(([k, label]) => (
+            <a key={k} href={q({ type: k, status: "ALL" })} className={type === k ? "active" : ""}>
+              {label} <span className="tab-count">{typeCount[k]}</span>
+            </a>
+          ))}
+        </nav>
         <section className="kpis">
           {FILTERS.map((f) => (
-            <a key={f.key} href={`/?status=${f.key}`} className={`kpi ${status === f.key ? "active" : ""}`}>
+            <a key={f.key} href={q({ status: f.key })} className={`kpi ${status === f.key ? "active" : ""}`}>
               <div className="label">{f.label}</div>
               <div className="value">{f.key === "ALL" ? rows.length : count(f.key)}</div>
             </a>

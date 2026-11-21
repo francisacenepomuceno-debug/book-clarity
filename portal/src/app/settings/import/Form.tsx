@@ -16,6 +16,7 @@ export function ImportForm() {
           <span className="muted" style={{ fontWeight: 400 }}>Usually the first day after the last commission you paid by hand. Payments before this date never earn commission in the portal; your "months already earned" should count those months.</span>
         </label>
         <label className="check"><input type="checkbox" name="create" defaultChecked={s.create} /> Create executives that aren't in the portal yet</label>
+        <label className="check"><input type="checkbox" name="addClients" defaultChecked={s.addClients} /> Add clients who aren't in the portal yet (e.g. ACE clients who aren't in Stripe), using the contact_email, phone and package columns</label>
         <button disabled={pending}>Check the file</button>
       </form>
       {s.error && <p className="form-error">{s.error}</p>}
@@ -31,7 +32,7 @@ export function ImportForm() {
               <tbody>
                 {s.ready.map((r) => (
                   <tr key={r.line}>
-                    <td>{r.line}</td><td>{r.clientName}</td><td>{r.type ?? "unchanged"}</td>
+                    <td>{r.line}</td><td>{r.clientName}{r.create && <><br /><span className="muted">new client</span></>}</td><td>{r.type ?? "unchanged"}</td>
                     <td>{r.shares.map((x) => `${x.executiveName} ${x.ratePercent}%`).join(" + ") || "unchanged"}{r.newExecutives.length ? ` (new: ${r.newExecutives.join(", ")})` : ""}</td>
                     <td>{r.monthsBeforePortal ?? "unchanged"}</td>
                     <td>{r.ace ? `from ${r.ace.startOn}${r.ace.historical ? " (historical)" : ""}` : "—"}</td>
@@ -49,6 +50,7 @@ export function ImportForm() {
               <input type="hidden" name="step" value="apply" />
               <input type="hidden" name="csv" value={s.csv} />
               {s.create && <input type="hidden" name="create" value="on" />}
+              {s.addClients && <input type="hidden" name="addClients" value="on" />}
               {s.settled && <input type="hidden" name="settled" value={s.settled} />}
               <p className="muted">Check the last column: any month listed there will appear on this month's commission statements. If a month was already paid by hand, set the "settled up to" date and check again.</p>
               <button disabled={pending}>Apply {s.ready.length} row{s.ready.length === 1 ? "" : "s"}</button>

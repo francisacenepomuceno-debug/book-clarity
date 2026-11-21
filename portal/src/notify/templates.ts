@@ -12,7 +12,7 @@ const firstName = (name: string) => (looksLikeName(name) ? name.trim().split(/\s
 function html(paragraphs: string[], button?: { label: string; url: string }): string {
   const body = paragraphs.map((p) => `<p style="margin:0 0 14px">${p}</p>`).join("");
   const btn = button
-    ? `<p style="margin:18px 0"><a href="${esc(button.url)}" style="background:#1f4e79;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;display:inline-block">${esc(button.label)}</a></p><p style="margin:0 0 14px;font-size:12px;color:#5b6573">Or open this link: ${esc(button.url)}</p>`
+    ? `<p style="margin:18px 0"><a href="${esc(button.url)}" style="background:#1f2386;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;display:inline-block">${esc(button.label)}</a></p><p style="margin:0 0 14px;font-size:12px;color:#5b6573">Or open this link: ${esc(button.url)}</p>`
     : "";
   return `<div style="font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;color:#1b1f24;max-width:560px">${body}${btn}<p style="margin:18px 0 0">Thank you,<br>Book Clarity</p></div>`;
 }
