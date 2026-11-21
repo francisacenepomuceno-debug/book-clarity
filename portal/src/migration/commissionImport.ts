@@ -202,7 +202,6 @@ export async function planImport(
       if (!Number.isInteger(m) || m < 0 || m > 12) return fail("Months already earned must be a whole number from 0 to 12.");
       monthsBeforePortal = m;
     }
-    if (shares.length === 0 && monthsBeforePortal !== undefined) return fail("Months already earned needs at least one executive and rate.");
 
     const effectiveOn = r.effective_from ?? "2000-01-01";
     if (!isRealDate(effectiveOn)) return fail("effective_from must be a real date like 2025-01-31.");
@@ -298,6 +297,13 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
         if (r.type) await db.client.update({ where: { id: r.clientId }, data: { type: previousType } });
         fail(res.error);
         continue;
+      }
+    } else if (r.monthsBeforePortal !== undefined) {
+      // Months only (e.g. clients who came from ACE): who earns is set later, by another import or on the client page.
+      const before = await db.client.findUniqueOrThrow({ where: { id: r.clientId }, select: { commissionMonthsBeforePortal: true } });
+      if (before.commissionMonthsBeforePortal !== r.monthsBeforePortal) {
+        await db.client.update({ where: { id: r.clientId }, data: { commissionMonthsBeforePortal: r.monthsBeforePortal } });
+        await writeAudit({ actorId: actor.id, action: "commission_months_set", entity: "Client", entityId: r.clientId, before, after: { commissionMonthsBeforePortal: r.monthsBeforePortal, via: "import" } });
       }
     }
     if (r.ace) {

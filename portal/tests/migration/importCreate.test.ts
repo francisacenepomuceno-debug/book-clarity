@@ -51,3 +51,24 @@ describe("import can add clients who aren't in the portal yet", () => {
     expect(plan.problems.map((p) => p.error)).toEqual([expect.stringMatching(/type/i), expect.stringMatching(/package/i)]);
   });
 });
+
+describe("months already earned on their own (clients who came from ACE)", () => {
+  it("are saved without an executive, keep the existing split, and re-running changes nothing", async () => {
+    const t = await db.client.create({ data: { name: "Teresa Pajaro", email: "307tacoloco@gmail.com", stripeCustomerId: "cus_T", type: "DIRECT" } });
+    const csv = "client,months_already_earned\ncus_T,6";
+    const plan = await planImport(csv, { createMissingExecutives: false });
+    expect(plan.problems).toEqual([]);
+    expect(plan.ready[0]).toMatchObject({ clientName: "Teresa Pajaro", shares: [], monthsBeforePortal: 6, willPost: [] });
+    expect(await applyImport(plan.ready)).toMatchObject({ applied: 1, failed: [] });
+    expect((await db.client.findUniqueOrThrow({ where: { id: t.id } })).commissionMonthsBeforePortal).toBe(6);
+    expect((await db.client.findUniqueOrThrow({ where: { id: t.id } })).type).toBe("DIRECT");
+    expect(await db.auditLog.count({ where: { action: "commission_months_set", entityId: t.id } })).toBe(1);
+    await applyImport((await planImport(csv, { createMissingExecutives: false })).ready);
+    expect(await db.auditLog.count({ where: { action: "commission_months_set", entityId: t.id } })).toBe(1);
+  });
+
+  it("are still range-checked", async () => {
+    await db.client.create({ data: { name: "X", stripeCustomerId: "cus_X" } });
+    expect((await planImport("client,months_already_earned\ncus_X,13", { createMissingExecutives: false })).problems[0].error).toMatch(/0 to 12/);
+  });
+});
