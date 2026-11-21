@@ -35,6 +35,8 @@ export async function signAction(_: StepResult, f: FormData): Promise<StepResult
     confirmDetails: f.get("confirmDetails") === "on",
     agreeAutopay: f.get("agreeAutopay") === "on",
     quickbooks: qb === "" ? null : Number(qb),
+    // Draw mode posts the pad's image (possibly empty, which signContract turns into "please draw").
+    signatureImage: str(f, "sigMode") === "type" ? null : str(f, "signatureImage"),
   }, ip);
   if (!r.ok) return { error: r.error };
   back(token);

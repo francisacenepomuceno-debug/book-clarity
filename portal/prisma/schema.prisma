@@ -325,8 +325,12 @@ model Onboarding {
   signedHash         String?
   contractVersion    String?
   quickbooks         String?
+  /// Drawn signature (PNG data URL) when the client drew instead of typing their name.
+  signatureImage     String?
   countersignedAt    DateTime?
   countersignedById  String?
+  /// Drawn countersignature (PNG data URL), when the countersigner drew it.
+  countersignatureImage String?
   feeInvoiceId       String?
   feeSetupSessionId  String?
   feePaidAt          DateTime?
