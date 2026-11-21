@@ -1,7 +1,7 @@
 import { requirePermission, can } from "@/auth/permissions";
 import { listOnboardings, type OnboardingRow } from "@/onboarding/overview";
 import { listPackages } from "@/packages/packages";
-import { STEP_LABEL } from "@/domain/onboarding";
+import { stepLabel } from "@/domain/onboarding";
 import { fmtDate } from "@/lib/format";
 import { PortalHeader } from "@/app/PortalHeader";
 import { NewClientForm, WaiveFeeButton } from "./Forms";
@@ -25,7 +25,7 @@ function Table({ rows, showStep, now, owner }: { rows: OnboardingRow[]; showStep
             <td>{r.packageName ?? "—"}</td>
             {showStep && (
               <td>
-                {STEP_LABEL[r.step]}
+                {stepLabel(r.step, r.feeCents === 0)}
                 {now - r.lastProgressAt.getTime() > STUCK_MS && <span className="badge AT_RISK" style={{ marginLeft: 6 }}>Stuck</span>}
               </td>
             )}

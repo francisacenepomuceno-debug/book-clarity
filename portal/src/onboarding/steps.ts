@@ -1,7 +1,7 @@
 import type { Client, Onboarding, Package } from "@prisma/client";
 import { db } from "@/lib/db";
 import { nextStep, type OnboardingStep } from "@/domain/onboarding";
-import { renderContract, sha256 } from "@/domain/contract";
+import { renderContract, sha256, waivedFeeTemplate } from "@/domain/contract";
 import { contractFor } from "@/packages/contracts";
 import { onboardingIdFromToken } from "@/onboarding/start";
 import { checkIntake, getCountersigner, getOnboardingSettings, parseIntakeQuestions } from "@/settings/onboarding";
@@ -85,8 +85,11 @@ const fmtWhen = (d: Date) => d.toLocaleString("en-US", { timeZone: TZ, dateStyle
 /** The contract as the client sees it before signing (or null if the package has none). */
 export async function contractPreview(l: Loaded, now: Date = new Date()) {
   if (!l.pkg) return null;
-  const c = await contractFor(l.pkg);
-  if (!c) return null;
+  const found = await contractFor(l.pkg);
+  if (!found) return null;
+  const waived = (l.onboarding.onboardingFeeCents ?? l.pkg.onboardingFeeCents) === 0;
+  // The version stays the package contract's; only the fee sentences differ for a waived fee.
+  const c = waived ? { ...found, template: waivedFeeTemplate(found.template) } : found;
   const d = (l.onboarding.details ?? {}) as Partial<Details>;
   const values = {
     date: fmtDay(now),

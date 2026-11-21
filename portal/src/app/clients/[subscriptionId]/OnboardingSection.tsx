@@ -1,7 +1,7 @@
 import type { Role } from "@prisma/client";
 import { can } from "@/auth/permissions";
 import { db } from "@/lib/db";
-import { nextStep, STEP_LABEL } from "@/domain/onboarding";
+import { nextStep, stepLabel } from "@/domain/onboarding";
 import { fmtDate } from "@/lib/format";
 
 /** Onboarding progress, agreement and questionnaire answers for staff. */
@@ -14,7 +14,7 @@ export async function OnboardingSection({ clientId, role }: { clientId: string; 
     <section className="panel pad">
       <h3>Onboarding</h3>
       <p>
-        {step === "done" ? <>Done. Call booked {fmtDate(o.callBookedAt)}.</> : <>Current step: {STEP_LABEL[step]}.</>}
+        {step === "done" ? <>Done. Call booked {fmtDate(o.callBookedAt)}.</> : <>Current step: {stepLabel(step, o.onboardingFeeCents === 0)}.</>}
         {o.signedAt && <> · Agreement signed {fmtDate(o.signedAt)} by {o.signerName}{o.countersignedAt ? ", countersigned" : ", awaiting countersignature"}{can(role, "ace.manage") && <> (<a href={`/contracts/${o.id}`}>view</a>{o.countersignedAt && <> · <a href={`/contracts/${o.id}/pdf`}>download PDF</a></>})</>}</>}
         {o.feePaidAt && <> · Onboarding fee paid {fmtDate(o.feePaidAt)}</>}
         {o.quickbooks && <> · QuickBooks: {o.quickbooks}</>}
