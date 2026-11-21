@@ -3,7 +3,7 @@ export default async function SetupComplete({ searchParams }: { searchParams: Pr
   if (onboarded) {
     return (
       <main className="auth">
-        <div className="card"><h1>You're all set</h1><p>Thank you for completing your onboarding. We look forward to meeting you on your onboarding call. Your monthly billing starts 14 days after your onboarding fee was paid.</p></div>
+        <div className="card"><h1>You're all set</h1><p>Thank you for completing your onboarding. We look forward to meeting you on your onboarding call. Your monthly billing date is shown on your agreement.</p></div>
       </main>
     );
   }
