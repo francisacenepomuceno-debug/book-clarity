@@ -13,4 +13,5 @@ export async function middleware(req: NextRequest) {
   return NextResponse.redirect(new URL("/login", req.url));
 }
 
-export const config = { matcher: "/((?!_next/static|_next/image|favicon.ico).*)" };
+// Static brand files (logo, icon) are public so the login and client pages can show them.
+export const config = { matcher: "/((?!_next/static|_next/image|favicon.ico|icon.png|brand/).*)" };

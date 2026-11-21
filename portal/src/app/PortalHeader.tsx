@@ -18,8 +18,12 @@ export function PortalHeader(p: { viewerName: string; role: Role; livemode?: boo
   ].filter(Boolean) as { href: string; label: string }[];
   return (
     <header>
-      <h1>
-        <a href="/" style={{ color: "inherit", textDecoration: "none" }}>Book Clarity · Client Dashboard</a>
+      <h1 className="brand">
+        <a href="/" aria-label="Book Clarity client portal: home">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/book-clarity-logo.png" alt="Book Clarity" width={148} height={40} />
+          <span className="brand-sub">Client Portal</span>
+        </a>
       </h1>
       <small>
         {p.fetchedAt && (

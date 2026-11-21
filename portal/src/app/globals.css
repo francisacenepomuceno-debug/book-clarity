@@ -4,7 +4,10 @@
   --text: #1b1f24;
   --muted: #5b6573;
   --line: #e3e6ea;
-  --brand: #1f4e79;
+  /* Book Clarity brand (logo): navy and green; darker navy from book-clarity.com. */
+  --brand: #1f2386;
+  --brand-dark: #0e182c;
+  --accent: #149c3a;
   --ok: #1a7f37;
   --warn: #9a6700;
   --bad: #c62828;
@@ -12,10 +15,19 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
-header { background: var(--brand); color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+header { background: #fff; color: var(--brand-dark); padding: 10px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 16px; border-bottom: 3px solid var(--accent); box-shadow: 0 1px 0 var(--line); }
 header h1 { font-size: 18px; margin: 0; }
-header small { opacity: .85; }
-header a { color: #fff; }
+header h1.brand a { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+header h1.brand img { height: 40px; width: auto; display: block; }
+header .brand-sub { color: var(--brand); font-size: 13px; font-weight: 600; letter-spacing: .02em; border-left: 1px solid var(--line); padding-left: 12px; }
+header small { color: var(--muted); }
+header a { color: var(--brand); }
+header small a:hover { color: var(--accent); }
+header .linklike { color: var(--brand); }
+/* Public pages (login, client onboarding, payment links): the logo above each card. */
+.auth .card::before { content: ""; display: block; height: 44px; margin-bottom: 4px; background: url(/brand/book-clarity-logo.png) left center / contain no-repeat; }
+.card h1 { color: var(--brand); }
+@media (max-width: 600px) { header { padding: 10px 16px; } header h1.brand img { height: 32px; } header .brand-sub { display: none; } }
 main { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
 .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; text-decoration: none; color: inherit; display: block; }
@@ -64,7 +76,6 @@ h2 { font-size: 20px; }
 .creds dd { margin: 0; word-break: break-all; }
 .card form { display: grid; gap: 12px; }
 .card label { display: grid; gap: 4px; font-weight: 600; font-size: 13px; }
-header a { color: #fff; }
 .row-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .row-form input { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; }
 .row-form button { padding: 5px 10px !important; }
@@ -118,3 +129,7 @@ tr.total td { font-weight: 600; }
 .alert-group .count { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 10px; background: #fdecea; color: var(--bad); font-size: 12px; text-align: center; }
 @media (max-width: 600px) { .report-table th, .report-table td { padding: 6px 8px; font-size: 13px; } }
 .checklist li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .checklist button { padding: 2px 8px !important; font-size: 12px; }
+
+.type-tabs { margin: 0 0 14px; }
+.tab-count { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 10px; background: rgba(0,0,0,.08); font-size: 12px; text-align: center; }
+.tabs a.active .tab-count { background: rgba(255,255,255,.25); }
