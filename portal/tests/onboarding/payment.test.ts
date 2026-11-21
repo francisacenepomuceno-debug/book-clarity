@@ -145,11 +145,26 @@ describe("onboarding fee", () => {
     expect(sub.items).toEqual([{ price_data: { currency: "usd", product: "prod_custom", unit_amount: 250000, recurring: { interval: "month" } } }]);
   });
 
-  it("no onboarding fee: saving the method starts billing 14 days later", async () => {
+  it("waived fee: the first month is charged right away (3% added for a credit card), then monthly on that date", async () => {
     await setup({ feeCents: 0 });
     await onOnboardingSetupSucceeded(si({ type: "card", funding: "credit" }), s);
     expect(stripe.invoices.create).not.toHaveBeenCalled();
-    expect(stripe.subscriptions.create).toHaveBeenCalledTimes(1);
+    const sub = (stripe.subscriptions.create.mock.calls[0] as unknown as [Stripe.SubscriptionCreateParams])[0];
+    expect(sub).not.toHaveProperty("trial_end");
+    expect(sub.default_payment_method).toBe("pm_1");
+    // The 3% is added to the first month as a pending item, before the subscription bills it.
+    const fee = (stripe.invoiceItems.create.mock.calls[0] as unknown as [Stripe.InvoiceItemCreateParams, Stripe.RequestOptions]);
+    expect(fee[0]).toMatchObject({ customer: "cus_new", amount: 1950, currency: "usd", metadata: { bc_card_fee: "1" } });
+    expect(fee[0]).not.toHaveProperty("invoice");
+    expect(fee[1].idempotencyKey).toBe(`bc-onb-firstfee-${onbId}`);
+    expect(stripe.invoiceItems.create.mock.invocationCallOrder[0]).toBeLessThan(stripe.subscriptions.create.mock.invocationCallOrder[0]);
+  });
+
+  it("waived fee with a debit card or bank account: no 3%, first month right away", async () => {
+    await setup({ feeCents: 0 });
+    await onOnboardingSetupSucceeded(si({ type: "us_bank_account" }), s);
+    expect(stripe.invoiceItems.create).not.toHaveBeenCalled();
+    expect((stripe.subscriptions.create.mock.calls[0] as unknown as [object])[0]).not.toHaveProperty("trial_end");
   });
 
   it("a bank payment that fails later sends the client back to the payment step", async () => {

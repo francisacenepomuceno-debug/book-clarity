@@ -16,7 +16,15 @@ import { formatUsd } from "@/lib/money";
 export const FIRST_CHARGE_DAYS = 14;
 const DAY_MS = 86400_000;
 
-export type PayOptions = { onboardingId: string; feeCents: number; creditCardFeeCents: number; declined: boolean };
+export type PayOptions = {
+  onboardingId: string;
+  feeCents: number;
+  creditCardFeeCents: number;
+  declined: boolean;
+  /** Monthly amount, and its 3% with a credit card: charged right away when the fee is waived. */
+  monthlyCents: number;
+  creditCardMonthlyFeeCents: number;
+};
 
 /** Public: the payment step: the fee, the extra for a credit card, and whether the last attempt was declined. */
 export async function onboardingPayOptions(token: string): Promise<PayOptions | { error: string }> {
@@ -25,7 +33,9 @@ export async function onboardingPayOptions(token: string): Promise<PayOptions | 
   if (l.step !== "payment") return { error: "This step isn't available right now. Please reload the page." };
   const feeCents = l.onboarding.onboardingFeeCents ?? l.pkg?.onboardingFeeCents ?? 0;
   const fee = decideCardFee({ baseCents: feeCents, paymentMethodType: "card", cardFunding: "credit", billingState: (l.onboarding.details as Partial<Details> | null)?.state ?? null, settings: await getFeeSettings() });
-  return { onboardingId: l.onboarding.id, feeCents, creditCardFeeCents: fee.feeCents, declined: Boolean(l.onboarding.feeInvoiceId) };
+  const monthlyCents = l.onboarding.monthlyCents ?? l.pkg?.monthlyPriceCents ?? 0;
+  const monthlyFee = decideCardFee({ baseCents: monthlyCents, paymentMethodType: "card", cardFunding: "credit", billingState: (l.onboarding.details as Partial<Details> | null)?.state ?? null, settings: await getFeeSettings() });
+  return { onboardingId: l.onboarding.id, feeCents, creditCardFeeCents: fee.feeCents, declined: Boolean(l.onboarding.feeInvoiceId), monthlyCents, creditCardMonthlyFeeCents: monthlyFee.feeCents };
 }
 
 /** Public: opens Stripe to save a bank account or card (nothing is charged on that page). */
@@ -88,7 +98,8 @@ export async function onOnboardingSetupSucceeded(si: Stripe.SetupIntent, stripe:
     const now = new Date();
     await db.onboarding.update({ where: { id: o.id }, data: { feeSetupSessionId: si.id, feePaymentMethodId: pm.id, feePaidAt: now, feeSubmittedAt: now, lastProgressAt: now } });
     await recompleteIfDone(o.id, now);
-    await ensureSubscription(o.id, stripe);
+    // Waived fee: the first month is billed now, then monthly on this date (owner, 2026-11-21).
+    await ensureSubscription(o.id, stripe, pm);
     return;
   }
 
@@ -164,7 +175,7 @@ export async function onOnboardingFeePaid(inv: Stripe.Invoice, stripe: Stripe = 
 }
 
 /** Creates the client's monthly subscription once (safe to call again: Stripe idempotency + the stored id). */
-async function ensureSubscription(onboardingId: string, stripe: Stripe): Promise<void> {
+async function ensureSubscription(onboardingId: string, stripe: Stripe, savedMethod?: Stripe.PaymentMethod): Promise<void> {
   const o = await db.onboarding.findUnique({ where: { id: onboardingId }, include: { client: true } });
   if (!o?.feePaidAt || o.client.stripeSubscriptionId || !o.client.stripeCustomerId) return;
   const pkg = o.packageId ? await db.package.findUnique({ where: { id: o.packageId } }) : null;
@@ -175,11 +186,32 @@ async function ensureSubscription(onboardingId: string, stripe: Stripe): Promise
     const price = await stripe.prices.retrieve(pkg.stripePriceId);
     item = { price_data: { currency: "usd", product: idOf(price.product as string)!, unit_amount: o.monthlyCents!, recurring: { interval: "month" } } };
   }
+  // With a waived onboarding fee the first month is charged straight away; otherwise 14 days after the fee.
+  const waived = (o.onboardingFeeCents ?? 0) === 0;
+  const firstCharge = waived ? new Date() : new Date(o.feePaidAt.getTime() + FIRST_CHARGE_DAYS * DAY_MS);
+  if (waived && savedMethod) {
+    // The first invoice is finalized at once, before the usual card-fee step can add the 3%, so add it here
+    // as a pending item that the subscription's first invoice picks up (credit cards only, per the fee settings).
+    const cus = (await stripe.customers.retrieve(o.client.stripeCustomerId)) as Stripe.Customer;
+    const fee = decideCardFee({
+      baseCents: o.monthlyCents ?? pkg.monthlyPriceCents,
+      paymentMethodType: savedMethod.type,
+      cardFunding: savedMethod.type === "card" ? ((savedMethod.card?.funding ?? "unknown") as "credit") : null,
+      billingState: cus.address?.state ?? null,
+      settings: await getFeeSettings(),
+    });
+    if (fee.feeCents > 0) {
+      await stripe.invoiceItems.create(
+        { customer: o.client.stripeCustomerId, amount: fee.feeCents, currency: "usd", description: CARD_FEE_DESCRIPTION, discountable: false, metadata: { [CARD_FEE_METADATA_KEY]: "1", onboardingId: o.id } },
+        { idempotencyKey: `bc-onb-firstfee-${o.id}` },
+      );
+    }
+  }
   const sub = await stripe.subscriptions.create(
     {
       customer: o.client.stripeCustomerId,
       items: [item],
-      trial_end: Math.floor((o.feePaidAt.getTime() + FIRST_CHARGE_DAYS * DAY_MS) / 1000),
+      ...(waived ? {} : { trial_end: Math.floor(firstCharge.getTime() / 1000) }),
       ...(o.feePaymentMethodId ? { default_payment_method: o.feePaymentMethodId } : {}),
       proration_behavior: "none",
       metadata: { onboardingId: o.id, portalClientId: o.clientId },
@@ -188,7 +220,7 @@ async function ensureSubscription(onboardingId: string, stripe: Stripe): Promise
   );
   await db.client.update({ where: { id: o.clientId }, data: { stripeSubscriptionId: sub.id, subscriptionStatus: sub.status } });
   await db.onboarding.update({ where: { id: o.id }, data: { stripeSubscriptionId: sub.id } });
-  await writeAudit({ actorId: null, action: "onboarding_subscription_started", entity: "Client", entityId: o.clientId, after: { subscriptionId: sub.id, firstCharge: new Date(o.feePaidAt.getTime() + FIRST_CHARGE_DAYS * DAY_MS) } });
+  await writeAudit({ actorId: null, action: "onboarding_subscription_started", entity: "Client", entityId: o.clientId, after: { subscriptionId: sub.id, firstCharge, feeWaived: waived } });
   await refreshClientStatus(o.clientId);
 }
 

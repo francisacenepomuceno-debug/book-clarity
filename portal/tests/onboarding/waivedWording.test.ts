@@ -8,10 +8,10 @@ const values = { date: "d", client_name: "Acme", client_first_name: "J", phone: 
 describe("waived onboarding fee wording", () => {
   it.each(["essentials", "growth", "enterprise", "enterprise-custom"])("%s: no fee charged at signup, billing counted from signing", (f) => {
     const text = renderContract(waivedFeeTemplate(readFileSync(`contracts/${f}.txt`, "utf8")), values).text;
-    expect(text).toContain("Your onboarding fee has been waived. Your first monthly retainer of $650.00 is charged 14 days after you sign up, on your monthly billing date.");
-    expect(text).toContain("begins 14 days after you sign up and recurs on that same date each month");
-    expect(text).toContain("with Stripe in the amount of $650.00 each month on my monthly billing date (14 days after signing) thereafter. The onboarding fee has been waived.");
-    expect(text).not.toMatch(/charged when you sign up|onboarding fee is paid|onboarding fee invoice/);
+    expect(text).toContain("Your onboarding fee has been waived. Your first monthly retainer of $650.00 is charged when you sign up, and then on the same date each month (your monthly billing date).");
+    expect(text).toContain("begins when you sign up and recurs on that same date each month");
+    expect(text).toContain("with Stripe in the amount of $650.00 when I sign up and each month on my monthly billing date thereafter. The onboarding fee has been waived.");
+    expect(text).not.toMatch(/onboarding fee of|onboarding fee is paid|onboarding fee invoice|14 days/);
   });
 
   it("leaves an agreement with a fee untouched, and keeps the restart-fee clause", () => {

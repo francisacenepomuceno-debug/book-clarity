@@ -53,18 +53,18 @@ export function contractFileFor(packageName: string): string | null {
 
 /**
  * Pure: a package contract reworded for a client whose onboarding fee was waived (approved by Book Clarity,
- * 2026-11-21). Only the sentences about charging the fee and counting billing from its payment change.
+ * 2026-11-21): no fee, and the first month is charged at signup, then on that date each month.
  */
 export function waivedFeeTemplate(template: string): string {
   return template
     .replace(
       "Your onboarding fee of {{onboarding_fee}} is charged when you sign up. Your first monthly retainer of {{monthly_amount}} is charged 14 days later, on your monthly billing date.",
-      "Your onboarding fee has been waived. Your first monthly retainer of {{monthly_amount}} is charged 14 days after you sign up, on your monthly billing date.",
+      "Your onboarding fee has been waived. Your first monthly retainer of {{monthly_amount}} is charged when you sign up, and then on the same date each month (your monthly billing date).",
     )
     .replace(
       " for the onboarding fee invoice upon signing, in the amount of {{onboarding_fee}}, and to continue auto-debiting the amount of {{monthly_amount}} each month on my monthly billing date (14 days after the onboarding fee is paid) thereafter.",
-      " in the amount of {{monthly_amount}} each month on my monthly billing date (14 days after signing) thereafter. The onboarding fee has been waived.",
+      " in the amount of {{monthly_amount}} when I sign up and each month on my monthly billing date thereafter. The onboarding fee has been waived.",
     )
-    .replaceAll("begins 14 days after the onboarding fee is paid", "begins 14 days after you sign up")
-    .replaceAll("(14 days after the onboarding fee is paid)", "(14 days after signing)");
+    .replaceAll("begins 14 days after the onboarding fee is paid", "begins when you sign up")
+    .replaceAll(" (14 days after the onboarding fee is paid)", "");
 }
