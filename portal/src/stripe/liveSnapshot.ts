@@ -35,3 +35,8 @@ export async function getLiveSnapshot(force = false): Promise<LiveSnapshot> {
   await syncClientsFromSnapshot(cache.rows);
   return cache;
 }
+
+/** Forget the cached snapshot (after the portal changes a subscription), so the next page load shows it. */
+export function clearLiveSnapshot(): void {
+  cache = null;
+}

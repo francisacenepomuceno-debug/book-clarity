@@ -22,6 +22,10 @@ export type LiveClientRow = {
   pastDueSince: Date | null;
   /** Each subscription item's price and product name (for linking to a portal package). */
   priceItems?: { priceId: string; productName: string }[];
+  /** From the portal: the linked package's monthly list price (null for Custom or unlinked). */
+  listPriceCents?: number | null;
+  /** Paying less than the list price, by a Stripe discount or a lower custom price. */
+  discounted?: boolean;
 };
 
 const fromTs = (t: number | null | undefined) => (t ? new Date(t * 1000) : null);

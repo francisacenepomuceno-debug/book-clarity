@@ -5,11 +5,12 @@ import { can } from "@/auth/permissions";
 import { refreshClientStatus } from "@/stripe/clientStatusSync";
 import type { LiveClientRow } from "@/stripe/mapSubscription";
 import type { ClientStatus } from "@/domain/clientStatus";
+import { discountState } from "@/domain/pricing";
 
 type Base = Pick<LiveClientRow, "subscriptionId" | "name" | "status" | "packageName" | "sixMonthContract" | "nextChargeDate" | "pastDueSince"> & { clientType: "DIRECT" | "ACE" };
 type Financial = Pick<
   LiveClientRow,
-  "customerId" | "email" | "packageMonthlyCents" | "cardFeeMonthlyCents" | "hasDiscount" | "autopay" | "paymentMethod" | "amountDueCents"
+  "customerId" | "email" | "packageMonthlyCents" | "cardFeeMonthlyCents" | "hasDiscount" | "autopay" | "paymentMethod" | "amountDueCents" | "listPriceCents" | "discounted"
 >;
 export type ClientRow = Base & Partial<Financial>;
 
@@ -36,6 +37,8 @@ export function scopeRow(r: LiveClientRow, role: Role): ClientRow {
     autopay: r.autopay,
     paymentMethod: r.paymentMethod,
     amountDueCents: r.amountDueCents,
+    listPriceCents: r.listPriceCents ?? null,
+    discounted: r.discounted ?? false,
   };
 }
 
@@ -103,6 +106,24 @@ export async function withClientTypes(rows: LiveClientRow[]): Promise<LiveClient
     // A continued ACE client is still prepaid until the period ends, whatever Stripe shows meanwhile.
     const prepaid = a.acePrepaidUntil !== null && a.acePrepaidUntil > now;
     return { ...r, clientType: "ACE" as const, ...(prepaid ? { status: "PREPAID_ACE" as const, pastDueSince: null, amountDueCents: 0 } : {}) };
+  });
+}
+
+/**
+ * Adds the portal side of pricing to live rows: the linked package's name and list price, and whether the client
+ * pays less than that list price (a Stripe discount, or a lower custom price such as one set by hand in Stripe).
+ */
+export async function withPricing(rows: LiveClientRow[]): Promise<LiveClientRow[]> {
+  const clients = await db.client.findMany({
+    where: { stripeSubscriptionId: { in: rows.map((r) => r.subscriptionId) } },
+    select: { stripeSubscriptionId: true, package: { select: { name: true, monthlyPriceCents: true, isCustom: true } } },
+  });
+  const pkg = new Map(clients.map((c) => [c.stripeSubscriptionId, c.package]));
+  return rows.map((r) => {
+    const p = pkg.get(r.subscriptionId) ?? null;
+    const listPriceCents = p && !p.isCustom ? p.monthlyPriceCents : null;
+    const packageName = p && (r.packageName === "—" || r.packageName.startsWith("Other:")) ? p.name : r.packageName;
+    return { ...r, packageName, listPriceCents, discounted: discountState(r, listPriceCents).discounted };
   });
 }
 
