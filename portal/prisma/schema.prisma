@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
   // Neon on Vercel provides a pooled DATABASE_URL and a direct DATABASE_URL_UNPOOLED (used for migrations).
   directUrl = env("DATABASE_URL_UNPOOLED")
@@ -58,82 +58,128 @@ model User {
 }
 
 model Package {
-  id                 String   @id @default(cuid())
+  id                 String        @id @default(cuid())
   name               String
-  stripePriceId      String?  @unique
+  stripePriceId      String?       @unique
   monthlyPriceCents  Int
   onboardingFeeCents Int
-  isCustom           Boolean  @default(false)
-  active             Boolean  @default(true)
+  isCustom           Boolean       @default(false)
+  active             Boolean       @default(true)
   contractTemplate   String?
   contractVersion    String?
   clients            Client[]
+  priceChanges       PriceChange[]
+}
+
+/// A scheduled package price increase (Owners / Super Admin). New clients pay the new price from the start date;
+/// current clients on the full list price move at their first bill on or after it, after a 30-day notice.
+model PriceChange {
+  id                String            @id @default(cuid())
+  packageId         String
+  package           Package           @relation(fields: [packageId], references: [id])
+  oldMonthlyCents   Int
+  newMonthlyCents   Int
+  oldStripePriceId  String
+  newStripePriceId  String
+  /// First day of the new price, at 00:00 in the business timezone.
+  effectiveAt       DateTime
+  createdById       String
+  createdAt         DateTime          @default(now())
+  /// When the package itself switched to the new price (new clients from then on).
+  packageSwitchedAt DateTime?
+  cancelledAt       DateTime?
+  cancelledById     String?
+  moves             PriceChangeMove[]
+}
+
+/// One current client moved to the new price (their subscription updated in Stripe).
+model PriceChangeMove {
+  id             String      @id @default(cuid())
+  priceChangeId  String
+  priceChange    PriceChange @relation(fields: [priceChangeId], references: [id])
+  clientId       String
+  subscriptionId String
+  fromPriceId    String
+  fromCents      Int
+  /// The client's first bill at the new price.
+  startsOn       DateTime
+  appliedAt      DateTime    @default(now())
+
+  @@unique([priceChangeId, clientId])
 }
 
 model Client {
-  id                    String       @id @default(cuid())
-  name                  String
-  email                 String?
-  phone                 String?
-  billingState          String?
-  type                  ClientType   @default(DIRECT)
-  status                ClientStatus @default(ONBOARDING)
-  packageId             String?
-  package               Package?     @relation(fields: [packageId], references: [id])
-  stripeCustomerId      String?      @unique
-  stripeSubscriptionId  String?      @unique
-  ghlContactId          String?
-  defaultPaymentFunding String?
-  subscriptionStatus    String?
-  commissionMonthsBeforePortal Int @default(0)
-  acePrepaidUntil       DateTime?
-  aceSlotId             String?
-  continuationDecision  String?
-  clientAnswer          String?
-  continuationBy        String?
-  clientAnsweredAt      DateTime?
-  aceSetupSessionId     String?
-  suspendedAt           DateTime?
-  suspensionWaivedAt    DateTime?
-  /** When the client started with Book Clarity (Stripe subscription start), for reports. */
-  startedAt             DateTime?
-  onboarding            Onboarding?
-  createdAt             DateTime     @default(now())
-  endedAt               DateTime?
-  invoices              Invoice[]
-  discounts             Discount[]
+  id                           String       @id @default(cuid())
+  name                         String
+  email                        String?
+  phone                        String?
+  billingState                 String?
+  type                         ClientType   @default(DIRECT)
+  status                       ClientStatus @default(ONBOARDING)
+  packageId                    String?
+  package                      Package?     @relation(fields: [packageId], references: [id])
+  stripeCustomerId             String?      @unique
+  stripeSubscriptionId         String?      @unique
+  ghlContactId                 String?
+  defaultPaymentFunding        String?
+  subscriptionStatus           String?
+  commissionMonthsBeforePortal Int          @default(0)
+  acePrepaidUntil              DateTime?
+  aceSlotId                    String?
+  continuationDecision         String?
+  clientAnswer                 String?
+  continuationBy               String?
+  clientAnsweredAt             DateTime?
+  aceSetupSessionId            String?
+  suspendedAt                  DateTime?
+  suspensionWaivedAt           DateTime?
+  /**
+   * When the client started with Book Clarity (Stripe subscription start), for reports.
+   */
+  startedAt                    DateTime?
+  onboarding                   Onboarding?
+  createdAt                    DateTime     @default(now())
+  endedAt                      DateTime?
+  invoices                     Invoice[]
+  discounts                    Discount[]
 }
 
 model Invoice {
-  id                String      @id @default(cuid())
-  stripeInvoiceId   String      @unique
-  clientId          String?
-  client            Client?     @relation(fields: [clientId], references: [id])
-  status            String
-  subtotalCents     Int
-  discountCents     Int         @default(0)
-  cardFeeCents      Int         @default(0)
-  onboardingCents   Int         @default(0)
-  refundedCents     Int         @default(0)
-  refundedPackageCents Int      @default(0)
-  processingSince   DateTime?
-  taxCents          Int         @default(0)
-  seenRefundIds     String[]    @default([])
-  totalCents        Int
-  amountPaidCents   Int         @default(0)
-  paidAt            DateTime?
-  paymentMethodType String?
-  cardFunding       String?
-  firstFailedAt     DateTime?
-  periodStart       DateTime
-  periodEnd         DateTime
-  /** When the bill was issued for its service period (Stripe's period_start looks back a cycle). */
-  billedAt          DateTime    @default(now())
-  /** Emailed invoices: the date payment is due. */
-  dueAt             DateTime?
-  /** Copied from Stripe history by the backfill: never earns commission or counts toward its window. */
-  backfilled        Boolean     @default(false)
-  kind              InvoiceKind
+  id                   String      @id @default(cuid())
+  stripeInvoiceId      String      @unique
+  clientId             String?
+  client               Client?     @relation(fields: [clientId], references: [id])
+  status               String
+  subtotalCents        Int
+  discountCents        Int         @default(0)
+  cardFeeCents         Int         @default(0)
+  onboardingCents      Int         @default(0)
+  refundedCents        Int         @default(0)
+  refundedPackageCents Int         @default(0)
+  processingSince      DateTime?
+  taxCents             Int         @default(0)
+  seenRefundIds        String[]    @default([])
+  totalCents           Int
+  amountPaidCents      Int         @default(0)
+  paidAt               DateTime?
+  paymentMethodType    String?
+  cardFunding          String?
+  firstFailedAt        DateTime?
+  periodStart          DateTime
+  periodEnd            DateTime
+  /**
+   * When the bill was issued for its service period (Stripe's period_start looks back a cycle).
+   */
+  billedAt             DateTime    @default(now())
+  /**
+   * Emailed invoices: the date payment is due.
+   */
+  dueAt                DateTime?
+  /**
+   * Copied from Stripe history by the backfill: never earns commission or counts toward its window.
+   */
+  backfilled           Boolean     @default(false)
+  kind                 InvoiceKind
 
   @@index([paidAt])
   @@index([billedAt])
@@ -262,9 +308,13 @@ model AceBatch {
   paidVia          AcePayment?
   paymentMethod    String?
   paymentReference String?
-  /** 3% fee ACE paid on top when paying a batch by credit card. */
+  /**
+   * 3% fee ACE paid on top when paying a batch by credit card.
+   */
   cardFeeCents     Int         @default(0)
-  /** Entered at migration: bought before the portal, commission already settled outside it. */
+  /**
+   * Entered at migration: bought before the portal, commission already settled outside it.
+   */
   historical       Boolean     @default(false)
   createdById      String
   createdAt        DateTime    @default(now())
@@ -309,40 +359,42 @@ model Notification {
   @@index([clientId])
 }
 
-/** A client's self-serve onboarding progress (Plan 4B). */
+/**
+ * A client's self-serve onboarding progress (Plan 4B).
+ */
 model Onboarding {
-  id                 String    @id @default(cuid())
-  clientId           String    @unique
-  client             Client    @relation(fields: [clientId], references: [id])
-  packageId          String?
-  monthlyCents       Int?
-  onboardingFeeCents Int?
-  details            Json?
-  signedAt           DateTime?
-  signerName         String?
-  signerIp           String?
-  signedText         String?
-  signedHash         String?
-  contractVersion    String?
-  quickbooks         String?
+  id                    String    @id @default(cuid())
+  clientId              String    @unique
+  client                Client    @relation(fields: [clientId], references: [id])
+  packageId             String?
+  monthlyCents          Int?
+  onboardingFeeCents    Int?
+  details               Json?
+  signedAt              DateTime?
+  signerName            String?
+  signerIp              String?
+  signedText            String?
+  signedHash            String?
+  contractVersion       String?
+  quickbooks            String?
   /// Drawn signature (PNG data URL) when the client drew instead of typing their name.
-  signatureImage     String?
-  countersignedAt    DateTime?
-  countersignedById  String?
+  signatureImage        String?
+  countersignedAt       DateTime?
+  countersignedById     String?
   /// Drawn countersignature (PNG data URL), when the countersigner drew it.
   countersignatureImage String?
-  feeInvoiceId       String?
-  feeSetupSessionId  String?
-  feePaidAt          DateTime?
-  feeSubmittedAt     DateTime?
-  feePaymentMethodId String?
-  stripeSubscriptionId String?
-  intake             Json?
-  intakeAt           DateTime?
-  callBookedAt       DateTime?
-  completedAt        DateTime?
-  lastProgressAt     DateTime  @default(now())
-  createdById        String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  feeInvoiceId          String?
+  feeSetupSessionId     String?
+  feePaidAt             DateTime?
+  feeSubmittedAt        DateTime?
+  feePaymentMethodId    String?
+  stripeSubscriptionId  String?
+  intake                Json?
+  intakeAt              DateTime?
+  callBookedAt          DateTime?
+  completedAt           DateTime?
+  lastProgressAt        DateTime  @default(now())
+  createdById           String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 }
