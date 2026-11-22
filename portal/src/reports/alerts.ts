@@ -8,7 +8,7 @@ export const DISCOUNT_ENDING_DAYS = 30;
 export const STUCK_ONBOARDING_DAYS = 3;
 
 export type AlertGroup = {
-  kind: "declines" | "atRisk" | "aceMonth6" | "openSlots" | "discountsEnding" | "stuckOnboarding" | "countersign";
+  kind: "declines" | "atRisk" | "aceMonth6" | "aceEnded" | "openSlots" | "discountsEnding" | "stuckOnboarding" | "countersign";
   title: string;
   items: { name: string; detail: string; href: string }[];
 };
@@ -23,7 +23,7 @@ function addMonths(d: Date, months: number): Date {
 
 /** What needs an Owner's attention today (spec §12). Empty groups are left out. */
 export async function dashboardAlerts(now: Date = new Date()): Promise<AlertGroup[]> {
-  const [declined, risky, aceSoon, openSlots, discounts, stuck, unsigned] = await Promise.all([
+  const [declined, risky, aceSoon, aceEnded, openSlots, discounts, stuck, unsigned] = await Promise.all([
     db.invoice.findMany({
       where: { kind: "SUBSCRIPTION", status: "open", firstFailedAt: { gte: new Date(now.getTime() - DECLINE_LOOKBACK_DAYS * DAY) }, client: { endedAt: null } },
       include: { client: true },
@@ -31,6 +31,11 @@ export async function dashboardAlerts(now: Date = new Date()): Promise<AlertGrou
     db.client.findMany({ where: { status: { in: ["AT_RISK", "SUSPENDED"] }, endedAt: null } }),
     db.client.findMany({
       where: { type: "ACE", endedAt: null, continuationDecision: null, stripeSubscriptionId: null, acePrepaidUntil: { gte: now, lte: new Date(now.getTime() + CONTINUATION_NOTICE_DAYS * DAY) } },
+    }),
+    // Stays until an Owner or the Super Admin records Continuing or Ending on the client's page.
+    db.client.findMany({
+      where: { type: "ACE", endedAt: null, continuationDecision: null, stripeSubscriptionId: null, acePrepaidUntil: { lt: now } },
+      orderBy: { acePrepaidUntil: "asc" },
     }),
     db.aceSlot.groupBy({ by: ["batchId"], where: { clientId: null }, _count: { _all: true } }),
     db.discount.findMany({ where: { replacedAt: null, client: { endedAt: null } }, include: { client: true } }),
@@ -55,6 +60,11 @@ export async function dashboardAlerts(now: Date = new Date()): Promise<AlertGrou
       kind: "aceMonth6",
       title: `ACE clients reaching month 6 within ${CONTINUATION_NOTICE_DAYS} days, no decision yet`,
       items: aceSoon.map((c) => ({ name: c.name, detail: `prepaid until ${fmtDate(c.acePrepaidUntil)}`, href: clientHref(c) })),
+    },
+    {
+      kind: "aceEnded",
+      title: "ACE prepaid time ended, no decision yet (not being billed)",
+      items: aceEnded.map((c) => ({ name: c.name, detail: `prepaid ended ${fmtDate(c.acePrepaidUntil)}${c.clientAnswer === "YES" ? " · client said yes" : ""}`, href: clientHref(c) })),
     },
     {
       kind: "openSlots",

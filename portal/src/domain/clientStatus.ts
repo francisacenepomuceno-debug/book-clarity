@@ -10,6 +10,7 @@ export type ClientStatus =
   | "PAUSED"
   | "SUSPENDED"
   | "CONTINUING_AWAITING_PM"
+  | "ACE_AWAITING_DECISION"
   | "ENDED";
 
 export type StatusInput = {
@@ -21,6 +22,8 @@ export type StatusInput = {
   onboardingComplete: boolean;
   acePrepaidUntil: Date | null;
   continuingAwaitingPm: boolean;
+  /** ACE prepaid time is over, no subscription, and no Continuing/Ending decision recorded yet. */
+  aceAwaitingDecision?: boolean;
   latestInvoice: {
     status: "draft" | "open" | "paid" | "uncollectible" | "void";
     firstFailedAt: Date | null;
@@ -36,6 +39,8 @@ export function deriveClientStatus(i: StatusInput): ClientStatus {
   if (i.endedAt) return "ENDED";
   if (!i.onboardingComplete) return "ONBOARDING";
   if (i.acePrepaidUntil && i.acePrepaidUntil > i.now) return "PREPAID_ACE";
+  // Nothing is billed until someone decides; showing them as Current would look like a paying client.
+  if (i.aceAwaitingDecision) return "ACE_AWAITING_DECISION";
   if (i.suspended) return "SUSPENDED";
   if (i.paused) return "PAUSED";
   if (i.continuingAwaitingPm) return "CONTINUING_AWAITING_PM";
@@ -60,5 +65,6 @@ export const STATUS_LABEL: Record<ClientStatus, string> = {
   PAUSED: "Paused",
   SUSPENDED: "Suspended (unpaid)",
   CONTINUING_AWAITING_PM: "Continuing: awaiting payment method",
+  ACE_AWAITING_DECISION: "ACE ended: awaiting decision",
   ENDED: "Ended",
 };
