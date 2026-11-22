@@ -93,6 +93,8 @@ describe("commissionProgress", () => {
       windowMonths: 12,
       earnedMonths: 5,
       remainingMonths: 7,
+      mainPackageName: null,
+      otherPackages: [],
       split: [{ executiveName: "Jose", ratePercent: 10 }],
     });
   });

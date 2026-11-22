@@ -21,7 +21,7 @@ function packagePriceCentsOf(sub: Stripe.Subscription): number {
 const MAX_REASON = 500; // Stripe metadata value limit
 
 /** Owner-only: discount a client's subscription for N months. Replaces any current discount. */
-export async function applyDiscount(clientId: string, input: DiscountInput): Promise<ActionResult<{ discountId: string }>> {
+export async function applyDiscount(clientId: string, input: DiscountInput, subscriptionId?: string): Promise<ActionResult<{ discountId: string }>> {
   let actor;
   try {
     actor = await requirePermission("discounts.apply");
@@ -32,7 +32,11 @@ export async function applyDiscount(clientId: string, input: DiscountInput): Pro
   if (input.reason && input.reason.trim().length > MAX_REASON) return { ok: false, error: `Reason must be ${MAX_REASON} characters or fewer.` };
   const client = await db.client.findUnique({ where: { id: clientId } });
   if (!client?.stripeSubscriptionId) return { ok: false, error: "This client has no active subscription." };
-  const subId = client.stripeSubscriptionId;
+  // A client can pay for several packages; the discount goes on the one chosen (the main one by default).
+  const subId = subscriptionId ?? client.stripeSubscriptionId;
+  if (subId !== client.stripeSubscriptionId && !(await db.clientSubscription.findFirst({ where: { stripeSubscriptionId: subId, clientId } }))) {
+    return { ok: false, error: "That subscription isn't one of this client's." };
+  }
   const stripe = getStripe();
 
   // One discount change per client at a time: the row lock serialises double submits and two Owners.

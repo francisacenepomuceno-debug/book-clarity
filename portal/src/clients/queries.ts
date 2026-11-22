@@ -6,6 +6,7 @@ import { refreshClientStatus } from "@/stripe/clientStatusSync";
 import type { LiveClientRow } from "@/stripe/mapSubscription";
 import type { ClientStatus } from "@/domain/clientStatus";
 import { discountState } from "@/domain/pricing";
+import { ensureClientSubscription } from "@/clients/subscriptions";
 
 type Base = Pick<LiveClientRow, "subscriptionId" | "name" | "status" | "packageName" | "sixMonthContract" | "nextChargeDate" | "pastDueSince"> & { clientType: "DIRECT" | "ACE" };
 type Financial = Pick<
@@ -90,15 +91,26 @@ export async function syncClientsFromSnapshot(rows: LiveClientRow[]): Promise<vo
       },
     });
   }
+  // Every subscription (a client can pay for several packages, each billed on its own day).
+  const clientIds = new Map(
+    (await db.client.findMany({ where: { stripeCustomerId: { in: [...byCustomer.keys()] } }, select: { id: true, stripeCustomerId: true } })).map((c) => [c.stripeCustomerId!, c.id]),
+  );
+  for (const r of rows) {
+    const clientId = clientIds.get(r.customerId);
+    const products = [...new Set((r.priceItems ?? []).map((i) => i.productName).filter((n) => !/credit card fee|onboarding/i.test(n)))].join(" + ");
+    if (clientId) await ensureClientSubscription(clientId, r.subscriptionId, packageOf(r), products || r.packageName.replace(/^Other: /, ""));
+  }
 }
 
 /** Adds Direct/ACE from the portal's client records to live Stripe rows. */
 export async function withClientTypes(rows: LiveClientRow[]): Promise<LiveClientRow[]> {
+  const ids = rows.map((r) => r.subscriptionId);
   const aces = await db.client.findMany({
-    where: { type: "ACE", stripeSubscriptionId: { in: rows.map((r) => r.subscriptionId) } },
-    select: { stripeSubscriptionId: true, acePrepaidUntil: true },
+    where: { type: "ACE", OR: [{ stripeSubscriptionId: { in: ids } }, { subscriptions: { some: { stripeSubscriptionId: { in: ids } } } }] },
+    select: { stripeSubscriptionId: true, acePrepaidUntil: true, subscriptions: { select: { stripeSubscriptionId: true } } },
   });
-  const ace = new Map(aces.map((a) => [a.stripeSubscriptionId, a]));
+  const ace = new Map<string, { acePrepaidUntil: Date | null }>();
+  for (const a of aces) for (const s of [a.stripeSubscriptionId, ...a.subscriptions.map((x) => x.stripeSubscriptionId)]) if (s) ace.set(s, a);
   const now = new Date();
   return rows.map((r) => {
     const a = ace.get(r.subscriptionId);
@@ -114,13 +126,18 @@ export async function withClientTypes(rows: LiveClientRow[]): Promise<LiveClient
  * pays less than that list price (a Stripe discount, or a lower custom price such as one set by hand in Stripe).
  */
 export async function withPricing(rows: LiveClientRow[]): Promise<LiveClientRow[]> {
-  const clients = await db.client.findMany({
-    where: { stripeSubscriptionId: { in: rows.map((r) => r.subscriptionId) } },
-    select: { stripeSubscriptionId: true, package: { select: { name: true, monthlyPriceCents: true, isCustom: true } } },
-  });
-  const pkg = new Map(clients.map((c) => [c.stripeSubscriptionId, c.package]));
+  const ids = rows.map((r) => r.subscriptionId);
+  // A subscription's own package if set; for a client's main subscription, the client's package.
+  const subRows = await db.clientSubscription.findMany({ where: { stripeSubscriptionId: { in: ids } }, select: { stripeSubscriptionId: true, packageId: true } });
+  const mains = await db.client.findMany({ where: { stripeSubscriptionId: { in: ids } }, select: { stripeSubscriptionId: true, packageId: true } });
+  const pkgIdOf = new Map<string, string | null>();
+  for (const m of mains) pkgIdOf.set(m.stripeSubscriptionId!, m.packageId);
+  for (const s of subRows) if (s.packageId || !pkgIdOf.has(s.stripeSubscriptionId)) pkgIdOf.set(s.stripeSubscriptionId, s.packageId);
+  const pkgs = await db.package.findMany({ where: { id: { in: [...pkgIdOf.values()].filter((x): x is string => !!x) } }, select: { id: true, name: true, monthlyPriceCents: true, isCustom: true } });
+  const pkgById = new Map(pkgs.map((p) => [p.id, p]));
   return rows.map((r) => {
-    const p = pkg.get(r.subscriptionId) ?? null;
+    const id = pkgIdOf.get(r.subscriptionId);
+    const p = id ? pkgById.get(id) ?? null : null;
     const listPriceCents = p && !p.isCustom ? p.monthlyPriceCents : null;
     const packageName = p && (r.packageName === "—" || r.packageName.startsWith("Other:")) ? p.name : r.packageName;
     return { ...r, packageName, listPriceCents, discounted: discountState(r, listPriceCents).discounted };

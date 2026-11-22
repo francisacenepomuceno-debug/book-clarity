@@ -1,5 +1,6 @@
 "use server";
 
+import { subscriptionRef } from "@/clients/subscriptions";
 import { revalidatePath } from "next/cache";
 import { addExecutive, setClientCommission } from "@/commissions/splits";
 import { markStatementPaid } from "@/commissions/statements";
@@ -28,7 +29,7 @@ export async function setCommissionAction(_: FormResult, form: FormData): Promis
   const subscriptionId = String(form.get("subscriptionId") ?? "");
   // The form key is the Stripe subscription id, or the portal client id for clients without one (ACE).
   const client = subscriptionId.startsWith("sub_")
-    ? await db.client.findUnique({ where: { stripeSubscriptionId: subscriptionId }, select: { id: true } })
+    ? ((await subscriptionRef(subscriptionId))?.client ?? null)
     : await db.client.findUnique({ where: { id: subscriptionId }, select: { id: true } });
   if (!client) return { error: "Client not found. Refresh and try again." };
   const shares = [1, 2]

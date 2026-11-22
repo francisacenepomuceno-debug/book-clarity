@@ -59,17 +59,18 @@ model User {
 }
 
 model Package {
-  id                 String        @id @default(cuid())
+  id                 String               @id @default(cuid())
   name               String
-  stripePriceId      String?       @unique
+  stripePriceId      String?              @unique
   monthlyPriceCents  Int
   onboardingFeeCents Int
-  isCustom           Boolean       @default(false)
-  active             Boolean       @default(true)
+  isCustom           Boolean              @default(false)
+  active             Boolean              @default(true)
   contractTemplate   String?
   contractVersion    String?
   clients            Client[]
   priceChanges       PriceChange[]
+  subscriptions      ClientSubscription[]
 }
 
 /// A scheduled package price increase (Owners / Super Admin). New clients pay the new price from the start date;
@@ -106,25 +107,43 @@ model PriceChangeMove {
   startsOn       DateTime
   appliedAt      DateTime    @default(now())
 
-  @@unique([priceChangeId, clientId])
+  @@unique([priceChangeId, subscriptionId])
+}
+
+/// One Stripe subscription of a client. A client can pay for several packages, each billed on its own schedule.
+/// Client.stripeSubscriptionId is the client's main subscription (their bookkeeping package).
+model ClientSubscription {
+  id                   String    @id @default(cuid())
+  clientId             String
+  client               Client    @relation(fields: [clientId], references: [id])
+  stripeSubscriptionId String    @unique
+  packageId            String?
+  package              Package?  @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  /// What Stripe calls it (product names), shown when the subscription isn't linked to a portal package.
+  productName          String?
+  status               String?
+  endedAt              DateTime?
+  createdAt            DateTime  @default(now())
+
+  @@index([clientId])
 }
 
 model Client {
-  id                           String       @id @default(cuid())
+  id                           String               @id @default(cuid())
   name                         String
   email                        String?
   phone                        String?
   billingState                 String?
-  type                         ClientType   @default(DIRECT)
-  status                       ClientStatus @default(ONBOARDING)
+  type                         ClientType           @default(DIRECT)
+  status                       ClientStatus         @default(ONBOARDING)
   packageId                    String?
-  package                      Package?     @relation(fields: [packageId], references: [id])
-  stripeCustomerId             String?      @unique
-  stripeSubscriptionId         String?      @unique
+  package                      Package?             @relation(fields: [packageId], references: [id])
+  stripeCustomerId             String?              @unique
+  stripeSubscriptionId         String?              @unique
   ghlContactId                 String?
   defaultPaymentFunding        String?
   subscriptionStatus           String?
-  commissionMonthsBeforePortal Int          @default(0)
+  commissionMonthsBeforePortal Int                  @default(0)
   acePrepaidUntil              DateTime?
   aceSlotId                    String?
   continuationDecision         String?
@@ -139,9 +158,10 @@ model Client {
    */
   startedAt                    DateTime?
   onboarding                   Onboarding?
-  createdAt                    DateTime     @default(now())
+  createdAt                    DateTime             @default(now())
   endedAt                      DateTime?
   invoices                     Invoice[]
+  subscriptions                ClientSubscription[]
   discounts                    Discount[]
 }
 
@@ -150,6 +170,8 @@ model Invoice {
   stripeInvoiceId      String      @unique
   clientId             String?
   client               Client?     @relation(fields: [clientId], references: [id])
+  /// The Stripe subscription this invoice bills (a client can have several packages, each its own subscription).
+  stripeSubscriptionId String?
   status               String
   subtotalCents        Int
   discountCents        Int         @default(0)
@@ -184,6 +206,7 @@ model Invoice {
 
   @@index([paidAt])
   @@index([billedAt])
+  @@index([stripeSubscriptionId])
 }
 
 model Discount {

@@ -46,6 +46,7 @@ export async function upsertInvoiceFromStripe(
 
   const data = {
     clientId: client.id,
+    stripeSubscriptionId: subscriptionIdOf(inv),
     status: inv.status ?? "draft",
     subtotalCents: inv.subtotal,
     discountCents,

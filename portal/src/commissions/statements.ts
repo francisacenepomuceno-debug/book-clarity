@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 import { ForbiddenError, requirePermission } from "@/auth/permissions";
 import { monthOf, packagePaidCents, splitAt, windowMonthsFor } from "@/domain/commission";
+import { commissionGroup } from "@/commissions/engine";
+import { subscriptionsOf } from "@/clients/subscriptions";
 import type { ActionResult } from "@/billing/discounts";
 import { lockExecutive } from "@/commissions/engine";
 
@@ -45,11 +47,17 @@ export async function listStatements(): Promise<StatementRow[]> {
 export async function statementLines(executiveId: string, month: string) {
   await requirePermission("commissions.view");
   const entries = await db.commissionEntry.findMany({ where: { executiveId, month }, orderBy: [{ occurredAt: "asc" }, { kind: "asc" }] });
-  const clients = await db.client.findMany({ where: { id: { in: [...new Set(entries.map((e) => e.clientId))] } }, select: { id: true, name: true, type: true } });
-  const invoices = await db.invoice.findMany({ where: { id: { in: entries.map((e) => e.invoiceId) } }, select: { id: true, stripeInvoiceId: true } });
+  const clients = await db.client.findMany({ where: { id: { in: [...new Set(entries.map((e) => e.clientId))] } }, select: { id: true, name: true, type: true, stripeSubscriptionId: true, commissionMonthsBeforePortal: true } });
+  const invoices = await db.invoice.findMany({ where: { id: { in: entries.map((e) => e.invoiceId) } }, select: { id: true, stripeInvoiceId: true, stripeSubscriptionId: true } });
   const clientName = new Map(clients.map((c) => [c.id, c.name]));
-  const clientType = new Map(clients.map((c) => [c.id, c.type]));
+  const clientById = new Map(clients.map((c) => [c.id, c]));
   const stripeId = new Map(invoices.map((i) => [i.id, i.stripeInvoiceId]));
+  const subOf = new Map(invoices.map((i) => [i.id, i.stripeSubscriptionId]));
+  // Each package has its own window (the main package's depends on Direct/ACE; others are 12 months).
+  const windowOf = (e: { clientId: string; invoiceId: string }) => {
+    const c = clientById.get(e.clientId);
+    return c ? commissionGroup(c, subOf.get(e.invoiceId) ?? null).windowMonths : windowMonthsFor({ type: "DIRECT" });
+  };
   return entries.map((e) => ({
     clientName: clientName.get(e.clientId) ?? "(unknown client)",
     invoiceId: stripeId.get(e.invoiceId) ?? e.invoiceId,
@@ -59,7 +67,7 @@ export async function statementLines(executiveId: string, month: string) {
     rateBp: e.rateBp,
     amountCents: e.amountCents,
     windowIndex: e.windowIndex,
-    windowMonths: windowMonthsFor({ type: clientType.get(e.clientId) ?? "DIRECT" }),
+    windowMonths: windowOf(e),
   }));
 }
 
@@ -96,20 +104,34 @@ export async function markStatementPaid(executiveId: string, month: string, paid
   });
 }
 
-/** How far a client is through their commission window, and who earns on them now. */
+/**
+ * How far a client is through their commission windows, and who earns on them now. The main package comes first;
+ * each other package the client pays for has its own window (owner, 2026-11-22).
+ */
 export async function commissionProgress(clientId: string) {
   await requirePermission("commissions.view");
   const client = await db.client.findUniqueOrThrow({ where: { id: clientId } });
-  const windowMonths = windowMonthsFor(client);
   const paid = await db.invoice.findMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { not: null }, backfilled: false } });
-  const earnedMonths = Math.min(windowMonths, client.commissionMonthsBeforePortal + paid.filter((p) => packagePaidCents(p) > 0).length);
+  const subs = await subscriptionsOf(client);
+  const pkgs = await db.package.findMany({ where: { id: { in: subs.flatMap((s) => (s.packageId ? [s.packageId] : [])) } } });
+  const pkgName = new Map(pkgs.map((p) => [p.id, p.name]));
+  const progressFor = (subscriptionId: string | null) => {
+    const g = commissionGroup(client, subscriptionId);
+    const mine = paid.filter((p) => (g.isMain ? !client.stripeSubscriptionId || !p.stripeSubscriptionId || p.stripeSubscriptionId === client.stripeSubscriptionId : p.stripeSubscriptionId === subscriptionId));
+    const earnedMonths = Math.min(g.windowMonths, g.monthsBefore + mine.filter((p) => packagePaidCents(p) > 0).length);
+    return { windowMonths: g.windowMonths, earnedMonths, remainingMonths: g.windowMonths - earnedMonths };
+  };
+  const main = progressFor(client.stripeSubscriptionId);
+  const otherPackages = subs
+    .filter((s) => !s.isMain)
+    .map((s) => ({ subscriptionId: s.subscriptionId, packageName: (s.packageId && pkgName.get(s.packageId)) || s.productName || "Other package", ended: !!s.endedAt, ...progressFor(s.subscriptionId) }));
   const shares = await db.commissionShare.findMany({ where: { clientId } });
   const execs = await db.executive.findMany({ where: { id: { in: shares.map((s) => s.executiveId) } } });
   const name = new Map(execs.map((e) => [e.id, e.name]));
   return {
-    windowMonths,
-    earnedMonths,
-    remainingMonths: windowMonths - earnedMonths,
+    ...main,
+    mainPackageName: subs.find((s) => s.isMain)?.packageId ? pkgName.get(subs.find((s) => s.isMain)!.packageId!) ?? null : null,
+    otherPackages,
     split: splitAt(shares, new Date()).map((s) => ({ executiveName: name.get(s.executiveId) ?? "(removed)", ratePercent: s.rateBp / 100 })),
   };
 }
