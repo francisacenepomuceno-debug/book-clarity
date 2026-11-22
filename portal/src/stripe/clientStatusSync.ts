@@ -19,6 +19,8 @@ export async function refreshClientStatus(clientId: string, now: Date = new Date
     onboardingComplete: c.stripeSubscriptionId !== null || c.aceSlotId !== null || c.status !== "ONBOARDING",
     acePrepaidUntil: c.acePrepaidUntil,
     continuingAwaitingPm: c.continuationDecision === "CONTINUING" && c.stripeSubscriptionId === null,
+    aceAwaitingDecision:
+      c.type === "ACE" && c.acePrepaidUntil !== null && c.acePrepaidUntil <= now && c.stripeSubscriptionId === null && c.continuationDecision === null,
     latestInvoice: latest
       ? { status: latest.status as "open", firstFailedAt: latest.firstFailedAt }
       : null,

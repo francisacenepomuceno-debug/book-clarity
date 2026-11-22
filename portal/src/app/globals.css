@@ -150,3 +150,4 @@ tr.total td { font-weight: 600; }
 .discounted { color: var(--warn); }
 .price-change { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 10px; }
 .price-change h4 { margin: 0 0 6px; font-size: 14px; }
+.s-ACE_AWAITING_DECISION, .s-CONTINUING_AWAITING_PM { color: var(--warn); }

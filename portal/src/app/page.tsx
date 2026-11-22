@@ -21,8 +21,9 @@ const FILTERS: { key: ClientStatus | "ALL"; label: string }[] = [
   { key: "SUSPENDED", label: STATUS_LABEL.SUSPENDED },
   { key: "PAUSED", label: STATUS_LABEL.PAUSED },
   { key: "PREPAID_ACE", label: STATUS_LABEL.PREPAID_ACE },
+  { key: "ACE_AWAITING_DECISION", label: STATUS_LABEL.ACE_AWAITING_DECISION },
 ];
-const ORDER: ClientStatus[] = ["SUSPENDED", "AT_RISK", "PAST_DUE", "UNPAID", "CONTINUING_AWAITING_PM", "PAUSED", "CURRENT", "PREPAID_ACE", "ONBOARDING"];
+const ORDER: ClientStatus[] = ["SUSPENDED", "AT_RISK", "PAST_DUE", "UNPAID", "ACE_AWAITING_DECISION", "CONTINUING_AWAITING_PM", "PAUSED", "CURRENT", "PREPAID_ACE", "ONBOARDING"];
 const sum = (rows: ClientRow[], f: (r: ClientRow) => number | undefined) => rows.reduce((n, r) => n + (f(r) ?? 0), 0);
 
 /** Owner and Super Admin only: this month's expected vs collected, and what needs attention. */
