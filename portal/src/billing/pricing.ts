@@ -116,7 +116,7 @@ export async function revertToListPrice(clientId: string): Promise<ActionResult<
   return { ok: true, note };
 }
 
-type FeeChange = { item: Stripe.SubscriptionItem; action: "remove" | "update"; cents?: number; why: string };
+export type FeeChange = { item: Stripe.SubscriptionItem; action: "remove" | "update"; cents?: number; why: string };
 
 /**
  * What to do with fixed-amount card-fee lines when the price changes:
@@ -124,7 +124,7 @@ type FeeChange = { item: Stripe.SubscriptionItem; action: "remove" | "update"; c
  *   invoice itself (card fee switched on at launch), so it isn't charged twice;
  * - otherwise set to the fee rate on the new price.
  */
-async function planCardFeeLines(items: Stripe.SubscriptionItem[], sub: Stripe.Subscription, listCents: number): Promise<{ changes: FeeChange[]; key: string }> {
+export async function planCardFeeLines(items: Stripe.SubscriptionItem[], sub: Stripe.Subscription, listCents: number): Promise<{ changes: FeeChange[]; key: string }> {
   if (!items.length) return { changes: [], key: "nofee" };
   const settings = await getFeeSettings();
   const customer = typeof sub.customer === "object" ? (sub.customer as Stripe.Customer) : null;

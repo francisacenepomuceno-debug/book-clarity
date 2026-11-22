@@ -190,6 +190,19 @@ export const templates = {
     };
   },
 
+  priceIncrease(i: { name: string; packageName: string; oldAmount: string; newAmount: string; startsOn: string }): Message {
+    return {
+      subject: "An update to your Book Clarity monthly price",
+      html: html([
+        `Hi ${esc(firstName(i.name))},`,
+        `Thank you for being a Book Clarity client. We're writing to let you know that the monthly price of the <strong>${esc(i.packageName)}</strong> package is changing from <strong>${esc(i.oldAmount)}</strong> to <strong>${esc(i.newAmount)}</strong>.`,
+        `The new price starts with your monthly payment on <strong>${esc(i.startsOn)}</strong>. Your services and payment method stay the same, and you don't need to do anything.`,
+        `If you have any questions, just reply to this email and we'll be happy to help.`,
+      ]),
+      sms: sms(`Book Clarity: the monthly price of your ${i.packageName} package changes from ${i.oldAmount} to ${i.newAmount}, starting with your payment on ${i.startsOn}. Questions? Just reply.`),
+    };
+  },
+
   contractExecuted(i: { name: string; text: string; downloadUrl: string }): Message {
     return {
       subject: "Your signed Book Clarity agreement",

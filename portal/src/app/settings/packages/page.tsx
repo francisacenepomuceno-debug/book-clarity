@@ -6,6 +6,11 @@ import { formatUsd } from "@/lib/money";
 import { PortalHeader } from "@/app/PortalHeader";
 import { AceContactForm, AceCustomerForm, ContractForm, PackageForm } from "@/app/ace/Forms";
 import { contractFor } from "@/packages/contracts";
+import { getLiveSnapshot } from "@/stripe/liveSnapshot";
+import { priceChangeView } from "@/billing/priceChangeView";
+import { PRICE_NOTICE_DAYS } from "@/domain/priceChange";
+import { fmtDate } from "@/lib/format";
+import { CancelPriceIncrease, PriceIncreaseForm } from "./PriceIncrease";
 
 export const dynamic = "force-dynamic";
 const dollars = (c: number) => (c / 100).toFixed(2);
@@ -14,6 +19,13 @@ export default async function PackagesPage() {
   const viewer = await requirePermission("ace.manage");
   const [packages, aceCustomer, aceContact] = await Promise.all([listPackages(), getAceCustomerId(), getAceContactEmail()]);
   const contracts = await Promise.all(packages.map((p) => contractFor(p)));
+  const rows = await getLiveSnapshot().then((s) => s.rows).catch(() => null);
+  const views = await Promise.all(packages.map((p) => (p.isCustom ? null : priceChangeView(p.id, p.monthlyPriceCents, rows))));
+  const TZ = process.env.BUSINESS_TZ ?? "America/New_York";
+  const ymd = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: TZ });
+  const earliest = ymd(new Date(Date.now() + PRICE_NOTICE_DAYS * 86400_000));
+  const nextJan1 = `${new Date().getFullYear() + 1}-01-01`;
+  const suggested = nextJan1 >= earliest ? nextJan1 : earliest;
   const unlinked = await db.client.findMany({ where: { packageId: null, endedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true, stripeSubscriptionId: true } });
   return (
     <>
@@ -36,6 +48,50 @@ export default async function PackagesPage() {
               <ContractForm packageId={p.id} template={contracts[i]!.template} version={contracts[i]!.version} isDefault={!p.contractTemplate} />
             ) : (
               <ContractForm packageId={p.id} template="" version="none" isDefault={false} />
+            )}
+            {views[i] && (
+              <div className="price-change">
+                <h4>Price increase</h4>
+                {views[i]!.change ? (
+                  <>
+                    <p>
+                      <strong>
+                        {formatUsd(views[i]!.change!.oldMonthlyCents)} → {formatUsd(views[i]!.change!.newMonthlyCents)}/month
+                      </strong>{" "}
+                      starting {fmtDate(views[i]!.change!.effectiveAt)}.{" "}
+                      {views[i]!.change!.packageSwitched ? "New clients now pay the new price." : "New clients pay it from that date."}{" "}
+                      Current clients move at their first bill on or after it, after a {PRICE_NOTICE_DAYS}-day notice.
+                    </p>
+                    <ul className="plain">
+                      <li>Notices sent: {views[i]!.change!.noticed}</li>
+                      <li>
+                        Moved to the new price: {views[i]!.change!.moved.length}
+                        {views[i]!.change!.moved.length > 0 && <span className="muted"> ({views[i]!.change!.moved.map((m) => `${m.name}, from ${fmtDate(m.startsOn)}`).join("; ")})</span>}
+                      </li>
+                      {views[i]!.preview && <li>Still to move: {views[i]!.preview!.willMove.length}{views[i]!.preview!.willMove.length > 0 && <span className="muted"> ({views[i]!.preview!.willMove.join(", ")})</span>}</li>}
+                    </ul>
+                    {views[i]!.change!.canCancel && <CancelPriceIncrease priceChangeId={views[i]!.change!.id} />}
+                  </>
+                ) : !p.stripePriceId ? (
+                  <p className="muted">Add this package's Stripe price ID above to schedule a price increase.</p>
+                ) : (
+                  <>
+                    <p className="muted">
+                      New clients pay the new price from the start date. Current clients on the full {formatUsd(p.monthlyPriceCents)} price move at their first bill on or after it and get an email {PRICE_NOTICE_DAYS} days before.
+                      {views[i]!.preview && <> That&apos;s {views[i]!.preview!.willMove.length} current client{views[i]!.preview!.willMove.length === 1 ? "" : "s"} today.</>}
+                    </p>
+                    <PriceIncreaseForm packageId={p.id} packageName={p.name} currentPrice={`${formatUsd(p.monthlyPriceCents)}/month`} earliest={earliest} suggested={suggested} />
+                  </>
+                )}
+                {views[i]!.preview && views[i]!.preview!.notChanged.length > 0 && (
+                  <details>
+                    <summary>{views[i]!.preview!.notChanged.length} client{views[i]!.preview!.notChanged.length === 1 ? "" : "s"} not changed by a price increase (review by hand)</summary>
+                    <ul className="plain">
+                      {views[i]!.preview!.notChanged.map((n) => <li key={n.name}>{n.name} <span className="muted">· {formatUsd(n.monthlyCents)}/month · {n.why}</span></li>)}
+                    </ul>
+                  </details>
+                )}
+              </div>
             )}
           </section>
         ))}
