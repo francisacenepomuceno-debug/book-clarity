@@ -1,3 +1,4 @@
+import { ContinuationButtons } from "@/app/ace/Forms";
 import { notFound } from "next/navigation";
 import type { Role } from "@prisma/client";
 import { can } from "@/auth/permissions";
@@ -34,6 +35,19 @@ export async function PortalClientPage({ clientId, viewer }: { clientId: string;
           {client.email && can(viewer.role, "clients.viewFinancials") && <> · {client.email}</>}
         </p>
         {ace && slot && <p><a href={`/ace/${slot.batchId}`}>Open the ACE batch</a></p>}
+        {ace && client.type === "ACE" && !client.stripeSubscriptionId && client.acePrepaidUntil && client.status !== "ENDED" && (
+          <section className="panel pad">
+            <h3>After the ACE months</h3>
+            <p className="muted">
+              {client.continuationDecision === "CONTINUING"
+                ? "Marked continuing: waiting for the client to set up autopay. Send them their link if they haven't done it yet."
+                : client.continuationDecision === "ENDING"
+                  ? "Marked as not continuing: service ends when the prepaid period ends."
+                  : `No decision yet. Nothing is billed until someone marks them continuing and they set up autopay.${client.clientAnswer === "YES" ? " The client has said yes." : client.clientAnswer === "NO" ? " The client has said no." : ""}`}
+            </p>
+            <ContinuationButtons clientId={client.id} decision={client.continuationDecision} />
+          </section>
+        )}
         <SuspensionSection clientId={client.id} role={viewer.role} />
         <OnboardingSection clientId={client.id} role={viewer.role} />
         <CommissionSection clientId={client.id} formKey={client.id} role={viewer.role} />

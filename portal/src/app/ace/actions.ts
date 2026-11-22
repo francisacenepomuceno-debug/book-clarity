@@ -97,6 +97,7 @@ export async function continueAction(_: AceFormResult, f: FormData): Promise<Ace
   const r = await markContinuing(str(f.get("clientId")), base);
   if (!r.ok) return { error: r.error };
   revalidatePath("/ace");
+  revalidatePath(`/clients/${str(f.get("clientId"))}`);
   return { ok: true, setupUrl: r.setupUrl };
 }
 
@@ -104,6 +105,7 @@ export async function endAction(_: AceFormResult, f: FormData): Promise<AceFormR
   const r = await markEnded(str(f.get("clientId")));
   if (!r.ok) return { error: r.error };
   revalidatePath("/ace");
+  revalidatePath(`/clients/${str(f.get("clientId"))}`);
   return { ok: true };
 }
 
