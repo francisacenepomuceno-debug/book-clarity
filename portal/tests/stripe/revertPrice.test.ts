@@ -12,8 +12,15 @@ const stripeRef: { current: unknown } = { current: null };
 vi.mock("@/stripe/client", () => ({ getStripe: () => stripeRef.current }));
 
 type Item = { id: string; price: { id: string; unit_amount: number; product: { name: string } }; quantity: number };
-function fakeStripe(items: Item[], discounts: unknown[] = []) {
-  return { subscriptions: { retrieve: vi.fn(async () => ({ id: "sub_T", status: "active", discounts, items: { data: items } })), update: vi.fn(async () => ({ id: "sub_T" })) } };
+function fakeStripe(items: Item[], discounts: unknown[] = [], funding: string | null = null) {
+  const pm = funding ? { id: "pm_1", type: "card", card: { funding } } : { id: "pm_1", type: "us_bank_account" };
+  return {
+    subscriptions: {
+      retrieve: vi.fn(async () => ({ id: "sub_T", status: "active", discounts, items: { data: items }, default_payment_method: pm, customer: { id: "cus_T" } })),
+      update: vi.fn(async () => ({ id: "sub_T" })),
+    },
+    prices: { create: vi.fn(async () => ({ id: "price_fee_new" })) },
+  };
 }
 const s = () => stripeRef.current as ReturnType<typeof fakeStripe>;
 const as = (role: string) => (sessionRef.current = { user: { id: "u1", email: "u@bc.test", name: "U", role, totpEnabled: true }, twoFactorVerified: true });
@@ -84,13 +91,44 @@ describe("reverting to the original price", () => {
     expect(s().subscriptions.update).not.toHaveBeenCalled();
   });
 
-  it("refuses when already on the list price, and warns about a fixed card-fee line", async () => {
+  it("refuses when already on the list price", async () => {
     await linkClientPackage(clientId, growth);
     stripeRef.current = fakeStripe([{ ...custom500, price: { id: "price_growth", unit_amount: 65000, product: { name: "Growth Package" } } }]);
     expect(await revertToListPrice(clientId)).toMatchObject({ ok: false, error: expect.stringMatching(/already on the Growth list price/) });
-    stripeRef.current = fakeStripe([custom500, { id: "si_fee", price: { id: "price_fee", unit_amount: 1500, product: { name: "3% Credit Card Fee" } }, quantity: 1 }]);
-    const r = await revertToListPrice(clientId);
-    expect(r).toMatchObject({ ok: true, note: expect.stringMatching(/fixed card-fee line of \$15\.00/) });
-    expect((s().subscriptions.update.mock.calls as unknown as [string, { items: unknown }][])[0][1].items).toEqual([{ id: "si_pkg", price: "price_growth", quantity: 1 }]);
   });
+});
+
+describe("a fixed 3% card-fee line on the subscription", () => {
+  const fee: Item = { id: "si_fee", price: { id: "price_fee", unit_amount: 1500, product: { name: "3% Credit Card Fee" } }, quantity: 1 };
+  const feeWithMeta = { ...fee, price: { ...fee.price, currency: "usd", recurring: { interval: "month", interval_count: 1 }, product: { id: "prod_fee", name: "3% Credit Card Fee" } } };
+  const updateItems = () => (s().subscriptions.update.mock.calls as unknown as [string, { items: unknown }][])[0][1].items;
+  beforeEach(async () => { await linkClientPackage(clientId, growth); });
+
+  it("is removed when the client doesn't pay by credit card", async () => {
+    stripeRef.current = fakeStripe([custom500, fee], [], "debit");
+    const r = await revertToListPrice(clientId);
+    expect(r).toMatchObject({ ok: true, note: expect.stringMatching(/Removed the fixed \$15\.00 card-fee line: this client doesn't pay by credit card/) });
+    expect(updateItems()).toEqual([{ id: "si_pkg", price: "price_growth", quantity: 1 }, { id: "si_fee", deleted: true }]);
+  });
+
+  it("is removed for credit cards when the portal adds the fee to each invoice (no double fee)", async () => {
+    await db.setting.create({ data: { key: "cardFee", value: { enabled: true, rateBasisPoints: 300, excludedStates: [] } } });
+    stripeRef.current = fakeStripe([custom500, fee], [], "credit");
+    expect(await revertToListPrice(clientId)).toMatchObject({ ok: true, note: expect.stringMatching(/portal now adds the card fee/) });
+    expect(updateItems()).toEqual([{ id: "si_pkg", price: "price_growth", quantity: 1 }, { id: "si_fee", deleted: true }]);
+    expect(s().prices.create).not.toHaveBeenCalled();
+  });
+
+  it("is set to 3% of the new price for credit cards while the portal's card fee is still off", async () => {
+    stripeRef.current = fakeStripe([custom500, feeWithMeta as unknown as Item], [], "credit");
+    expect(await revertToListPrice(clientId)).toMatchObject({ ok: true, note: expect.stringMatching(/from \$15\.00 to \$19\.50/) });
+    expect(s().prices.create).toHaveBeenCalledWith(
+      expect.objectContaining({ product: "prod_fee", unit_amount: 1950, currency: "usd", recurring: { interval: "month", interval_count: 1 } }),
+      expect.anything(),
+    );
+    expect(updateItems()).toEqual([{ id: "si_pkg", price: "price_growth", quantity: 1 }, { id: "si_fee", price: "price_fee_new", quantity: 1 }]);
+    const a = await db.auditLog.findFirstOrThrow({ where: { action: "price_reverted_to_list" } });
+    expect((a.after as { cardFeeLines: unknown[] }).cardFeeLines).toEqual([expect.objectContaining({ id: "si_fee", action: "update", cents: 1950 })]);
+  });
+
 });

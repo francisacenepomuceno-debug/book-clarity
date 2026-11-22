@@ -29,7 +29,7 @@ export function RevertPriceButton(p: { clientId: string; subscriptionId: string;
     return (
       <>
         <p className="form-ok">Back on the original price from the next bill.</p>
-        {s.note && <p className="form-error">{s.note}</p>}
+        {s.note && <p className="muted">{s.note}</p>}
       </>
     );
   }
