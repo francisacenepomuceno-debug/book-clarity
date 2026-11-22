@@ -2,7 +2,7 @@ import { getLiveSnapshot } from "@/stripe/liveSnapshot";
 import { STATUS_LABEL, type ClientStatus } from "@/domain/clientStatus";
 import { formatUsd } from "@/lib/money";
 import { can, requirePermission } from "@/auth/permissions";
-import { aceDashboardRows, scopeRow, withClientTypes, type ClientRow } from "@/clients/queries";
+import { aceDashboardRows, scopeRow, withClientTypes, withPricing, type ClientRow } from "@/clients/queries";
 import { periodOf } from "@/domain/periods";
 import { expectedVsCollected } from "@/reports/queries";
 import { dashboardAlerts } from "@/reports/alerts";
@@ -61,6 +61,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const viewer = await requirePermission("clients.view");
   const money = can(viewer.role, "clients.viewFinancials");
   const owner = can(viewer.role, "reports.view");
+  const canRevert = can(viewer.role, "discounts.apply");
   const { status = "ALL", refresh, type: typeParam } = await searchParams;
   const type: "ALL" | "DIRECT" | "ACE" = typeParam === "DIRECT" || typeParam === "ACE" ? typeParam : "ALL";
   const q = (o: { status?: string; type?: string }) => {
@@ -87,7 +88,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     );
   }
 
-  const allRows = [...(await withClientTypes(snap.rows)), ...(await aceDashboardRows())].map((r) => scopeRow(r, viewer.role));
+  const allRows = [...(await withPricing(await withClientTypes(snap.rows))), ...(await aceDashboardRows())].map((r) => scopeRow(r, viewer.role));
   const typeCount = { ALL: allRows.length, DIRECT: allRows.filter((r) => r.clientType !== "ACE").length, ACE: allRows.filter((r) => r.clientType === "ACE").length };
   // Direct and ACE clients are shown separately (everything below follows the chosen type).
   const rows = type === "ALL" ? allRows : allRows.filter((r) => (type === "ACE" ? r.clientType === "ACE" : r.clientType !== "ACE"));
@@ -151,6 +152,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 <th>Type</th>
                 <th>Package</th>
                 {money && <th className="num">Monthly</th>}
+                {money && <th>Discounted</th>}
                 {money && <th className="num">Card fee</th>}
                 {money && <th>Payment method</th>}
                 <th>Next charge</th>
@@ -170,9 +172,22 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                   <td>
                     {r.packageName}
                     {r.sixMonthContract && <span className="muted"> · 6-month</span>}
-                    {r.hasDiscount && <span className="muted"> · discount</span>}
                   </td>
                   {money && <td className="num">{formatUsd(r.packageMonthlyCents ?? 0)}</td>}
+                  {money && (
+                    <td>
+                      {r.discounted ? (
+                        <>
+                          <strong className="discounted">Yes</strong>
+                          {r.listPriceCents && (r.packageMonthlyCents ?? 0) < r.listPriceCents && <span className="muted"> · list {formatUsd(r.listPriceCents)}</span>}
+                          {r.hasDiscount && <span className="muted"> · coupon</span>}
+                          {canRevert && <> · <a href={`/clients/${r.subscriptionId}#price`}>Revert</a></>}
+                        </>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                  )}
                   {money && <td className="num">{r.cardFeeMonthlyCents ? formatUsd(r.cardFeeMonthlyCents) : "—"}</td>}
                   {money && <td>{r.paymentMethod}</td>}
                   <td>{fmtDate(r.nextChargeDate)}</td>
@@ -182,7 +197,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
               ))}
               {shown.length === 0 && (
                 <tr>
-                  <td colSpan={money ? 10 : 6} className="muted">No clients in this group.</td>
+                  <td colSpan={money ? 11 : 6} className="muted">No clients in this group.</td>
                 </tr>
               )}
             </tbody>

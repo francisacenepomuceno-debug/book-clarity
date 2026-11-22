@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { getLiveSnapshot } from "@/stripe/liveSnapshot";
 import { getStripe } from "@/stripe/client";
 import { can, requirePermission } from "@/auth/permissions";
-import { scopeRow } from "@/clients/queries";
+import { scopeRow, withPricing } from "@/clients/queries";
 import { STATUS_LABEL } from "@/domain/clientStatus";
 import { formatUsd } from "@/lib/money";
 import { db } from "@/lib/db";
@@ -13,6 +13,7 @@ import { OnboardingSection } from "./OnboardingSection";
 import { SuspensionSection } from "./SuspensionSection";
 import { PortalClientPage } from "./PortalClientPage";
 import { DiscountForm } from "./DiscountForm";
+import { LinkPackageForm, RevertPriceButton } from "./PriceSection";
 
 export const dynamic = "force-dynamic";
 
@@ -25,10 +26,13 @@ export default async function ClientPage({ params }: { params: Promise<{ subscri
   const snap = await getLiveSnapshot();
   const live = snap.rows.find((r) => r.subscriptionId === subscriptionId);
   if (!live) notFound();
-  const r = scopeRow(live, viewer.role);
+  const r = scopeRow((await withPricing([live]))[0], viewer.role);
 
   const invoices = money ? (await getStripe().invoices.list({ subscription: subscriptionId, limit: 12 })).data : [];
   const client = await db.client.findUnique({ where: { stripeSubscriptionId: subscriptionId } });
+  const canLink = can(viewer.role, "ace.manage");
+  const packages = canLink ? await db.package.findMany({ orderBy: { name: "asc" } }) : [];
+  const linked = client?.packageId ? packages.find((x) => x.id === client.packageId) ?? null : null;
   const discounts = money && client ? await db.discount.findMany({ where: { clientId: client.id }, orderBy: { createdAt: "desc" }, take: 5 }) : [];
 
   return (
@@ -51,6 +55,37 @@ export default async function ClientPage({ params }: { params: Promise<{ subscri
               <div className="kpi"><div className="label">Paying by</div><div className="value small">{r.paymentMethod}</div></div>
               <div className="kpi"><div className="label">Amount due</div><div className="value">{r.amountDueCents ? formatUsd(r.amountDueCents) : "—"}</div></div>
             </section>
+
+            {canLink && client && (
+              <section className="panel pad" id="price">
+                <h3>Package and price</h3>
+                <LinkPackageForm
+                  clientId={client.id}
+                  subscriptionId={subscriptionId}
+                  packageId={client.packageId}
+                  packages={packages.map((x) => ({ id: x.id, label: x.isCustom ? `${x.name} (Custom)` : `${x.name} · ${formatUsd(x.monthlyPriceCents)}/mo` }))}
+                />
+                {r.discounted ? (
+                  <>
+                    <p>
+                      <strong className="discounted">Discounted.</strong> Paying {formatUsd(r.packageMonthlyCents ?? 0)}/month
+                      {r.listPriceCents ? <> instead of the {linked?.name} list price of {formatUsd(r.listPriceCents)}</> : null}
+                      {r.hasDiscount && <> · a Stripe discount is applied</>}.
+                    </p>
+                    {can(viewer.role, "discounts.apply") && linked && !linked.isCustom && (
+                      <RevertPriceButton
+                        clientId={client.id}
+                        subscriptionId={subscriptionId}
+                        confirmText={`Put ${r.name} back on ${linked.name} at ${formatUsd(linked.monthlyPriceCents)}/month? Any discount is removed. Nothing is charged now: the new price starts with the next bill${r.nextChargeDate ? ` (${fmtDate(r.nextChargeDate)})` : ""}.`}
+                      />
+                    )}
+                    {!linked && <p className="muted">Link the package above to see the original price and revert to it.</p>}
+                  </>
+                ) : (
+                  <p className="muted">{linked ? (linked.isCustom ? "Custom package: no list price to compare." : `Paying the ${linked.name} list price.`) : "Not linked to a package yet."}</p>
+                )}
+              </section>
+            )}
 
             {can(viewer.role, "discounts.apply") && (
               <section className="panel pad">
