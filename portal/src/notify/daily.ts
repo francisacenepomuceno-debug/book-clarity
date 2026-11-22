@@ -4,6 +4,7 @@ import { runAceBatchReminders, runAceNotices } from "@/notify/ace";
 import { runOnboardingReminders } from "@/onboarding/reminders";
 import { runSuspensions } from "@/billing/suspension";
 import { runPriceChanges } from "@/billing/priceChanges";
+import { fillInvoiceSubscriptions } from "@/clients/invoiceSubscriptions";
 
 async function safely<T>(name: string, f: () => Promise<T>): Promise<T | { error: string }> {
   try {
@@ -17,6 +18,8 @@ async function safely<T>(name: string, f: () => Promise<T>): Promise<T | { error
 /** Everything date-based, once a day (Vercel Cron). Each part is idempotent and isolated from the others. */
 
 export async function runDaily(now: Date = new Date()) {
+  // First, so each package's commission window sees its own invoices.
+  const invoiceSubscriptions = await safely("invoiceSubscriptions", () => fillInvoiceSubscriptions());
   const payments = await safely("payments", () => runPaymentReminders(now));
   const ace = await safely("ace", () => runAceNotices(now));
   const aceBatches = await safely("aceBatches", () => runAceBatchReminders(now));
@@ -28,5 +31,5 @@ export async function runDaily(now: Date = new Date()) {
   // because the message may have gone out — surfaced here instead.
   const stuckNotices = await db.notification.count({ where: { status: "PENDING", createdAt: { lt: new Date(now.getTime() - 3600_000) } } });
   if (stuckNotices > 0) console.warn(`[daily] ${stuckNotices} notice(s) stuck mid-send; check the Notification log`);
-  return { payments, ace, aceBatches, onboarding, priceChanges, suspensions, stuckNotices };
+  return { invoiceSubscriptions, payments, ace, aceBatches, onboarding, priceChanges, suspensions, stuckNotices };
 }

@@ -1,4 +1,5 @@
 import type Stripe from "stripe";
+import { subscriptionsOf } from "@/clients/subscriptions";
 import { db } from "@/lib/db";
 import { getStripe } from "@/stripe/client";
 import { ForbiddenError, requirePermission } from "@/auth/permissions";
@@ -50,11 +51,15 @@ export async function runSuspensions(now: Date = new Date(), stripe: Stripe = ge
     if (c.suspensionWaivedAt && inv.firstFailedAt! <= c.suspensionWaivedAt) continue;
     seen.add(c.id);
     try {
-      await stripe.subscriptions.update(
-        c.stripeSubscriptionId!,
-        { pause_collection: { behavior: "void" }, metadata: { [SUSPENDED_META]: "1" } },
-        { idempotencyKey: `bc-suspend-${inv.stripeInvoiceId}` },
-      );
+      // The whole client is suspended: every package they pay for (each its own subscription) stops billing.
+      const live = (await subscriptionsOf(c)).filter((s) => !s.endedAt).map((s) => s.subscriptionId);
+      for (const subId of live.length ? live : [c.stripeSubscriptionId!]) {
+        await stripe.subscriptions.update(
+          subId,
+          { pause_collection: { behavior: "void" }, metadata: { [SUSPENDED_META]: "1" } },
+          { idempotencyKey: subId === c.stripeSubscriptionId ? `bc-suspend-${inv.stripeInvoiceId}` : `bc-suspend-${inv.stripeInvoiceId}-${subId}` },
+        );
+      }
     } catch (e) {
       // One client's Stripe error (e.g. cancelled there) mustn't stop the others.
       console.error(`[suspend] ${c.id}: ${(e as Error).message}`);
@@ -82,7 +87,10 @@ async function resume(clientId: string, actorId: string | null, reason: string, 
   const c = await db.client.findUnique({ where: { id: clientId } });
   if (!c?.suspendedAt) return false;
   if (c.stripeSubscriptionId) {
-    await stripe.subscriptions.update(c.stripeSubscriptionId, { pause_collection: "", metadata: { [SUSPENDED_META]: "" } });
+    const live = (await subscriptionsOf(c)).filter((s) => !s.endedAt).map((s) => s.subscriptionId);
+    for (const subId of live.length ? live : [c.stripeSubscriptionId]) {
+      await stripe.subscriptions.update(subId, { pause_collection: "", metadata: { [SUSPENDED_META]: "" } });
+    }
   }
   const done = await db.client.updateMany({
     where: { id: clientId, suspendedAt: { not: null } },

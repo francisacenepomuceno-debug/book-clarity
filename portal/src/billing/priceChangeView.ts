@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { currentPriceChange } from "@/billing/priceChanges";
 import type { LiveClientRow } from "@/stripe/mapSubscription";
+import { activeSubscriptionsOnPackage } from "@/clients/subscriptions";
 
 type NotChanged = { name: string; monthlyCents: number; why: string };
 
@@ -26,9 +27,12 @@ export async function priceChangeView(
   rows: LiveClientRow[] | null,
   now: Date = new Date(),
 ): Promise<{ change: PriceChangeView | null; preview: { willMove: string[]; notChanged: NotChanged[] } | null }> {
-  const clients = await db.client.findMany({ where: { packageId, endedAt: null, stripeSubscriptionId: { not: null } }, select: { id: true, name: true, stripeSubscriptionId: true }, orderBy: { name: "asc" } });
+  // Every running subscription on the package (a client's main one and any extra ones).
+  const clients = (await activeSubscriptionsOnPackage(packageId))
+    .map((s) => ({ id: s.client.id, name: s.client.name, stripeSubscriptionId: s.subscriptionId }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const c = await currentPriceChange(packageId, now);
-  const moved = new Set(c?.moves.map((m) => m.clientId) ?? []);
+  const moved = new Set(c?.moves.map((m) => m.subscriptionId) ?? []);
   let preview: { willMove: string[]; notChanged: NotChanged[] } | null = null;
   if (rows) {
     const bySub = new Map(rows.map((r) => [r.subscriptionId, r]));
@@ -36,7 +40,7 @@ export async function priceChangeView(
     const willMove: string[] = [];
     const notChanged: NotChanged[] = [];
     for (const cl of clients) {
-      if (moved.has(cl.id)) continue;
+      if (moved.has(cl.stripeSubscriptionId)) continue;
       const r = bySub.get(cl.stripeSubscriptionId!);
       if (!r) continue;
       if (r.hasDiscount) notChanged.push({ name: cl.name, monthlyCents: r.packageMonthlyCents, why: "has a discount" });

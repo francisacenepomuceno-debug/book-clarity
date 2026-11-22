@@ -7,6 +7,7 @@ import { classifyProduct } from "@/stripe/catalog";
 import { formatUsd } from "@/lib/money";
 import type { ActionResult } from "@/billing/discounts";
 import { getFeeSettings } from "@/settings/cardFee";
+import { subscriptionRef } from "@/clients/subscriptions";
 
 const FORBIDDEN = { ok: false as const, error: "Only Owners and the Super Admin can do that." };
 
@@ -24,13 +25,29 @@ const productName = (it: Stripe.SubscriptionItem) => {
   return typeof p === "string" ? p : p.name;
 };
 
-/** Owners / Super Admin: link a client to a portal package by hand. Stripe sync never overwrites a link. */
-export async function linkClientPackage(clientId: string, packageId: string | null): Promise<ActionResult> {
+/**
+ * Owners / Super Admin: link one of a client's subscriptions to a portal package by hand (the main subscription
+ * when none is given). The main subscription's package is also the client's package. Stripe sync never overwrites it.
+ */
+export async function linkClientPackage(clientId: string, packageId: string | null, subscriptionId?: string): Promise<ActionResult> {
   const actor = await actorWith("ace.manage");
   if (!actor) return FORBIDDEN;
-  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, packageId: true } });
+  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, packageId: true, stripeSubscriptionId: true } });
   if (!client) return { ok: false, error: "Client not found." };
   if (packageId && !(await db.package.findUnique({ where: { id: packageId } }))) return { ok: false, error: "That package doesn't exist." };
+  const subId = subscriptionId ?? client.stripeSubscriptionId;
+  const isMain = !subId || subId === client.stripeSubscriptionId;
+  if (subId) {
+    const row = await db.clientSubscription.findUnique({ where: { stripeSubscriptionId: subId } });
+    if (row && row.clientId !== clientId) return { ok: false, error: "That subscription belongs to another client." };
+    if (!row && !isMain) return { ok: false, error: "That subscription isn't one of this client's." };
+    const before = row?.packageId ?? (isMain ? client.packageId : null);
+    if (before === packageId && (!isMain || client.packageId === packageId)) return { ok: true };
+    await db.clientSubscription.upsert({ where: { stripeSubscriptionId: subId }, create: { clientId, stripeSubscriptionId: subId, packageId }, update: { packageId } });
+    if (isMain) await db.client.update({ where: { id: clientId }, data: { packageId } });
+    await writeAudit({ actorId: actor.id, action: "client_package_linked", entity: "Client", entityId: clientId, before: { packageId: before, subscriptionId: subId }, after: { packageId, subscriptionId: subId } });
+    return { ok: true };
+  }
   if (client.packageId === packageId) return { ok: true };
   await db.client.update({ where: { id: clientId }, data: { packageId } });
   await writeAudit({ actorId: actor.id, action: "client_package_linked", entity: "Client", entityId: clientId, before: { packageId: client.packageId }, after: { packageId } });
@@ -42,18 +59,22 @@ export async function linkClientPackage(clientId: string, packageId: string | nu
  * The package line of the Stripe subscription moves to the package's Stripe price and any Stripe discount is removed.
  * Nothing is charged now: the new price applies from the next monthly bill (no proration).
  */
-export async function revertToListPrice(clientId: string): Promise<ActionResult<{ note?: string }>> {
+export async function revertToListPrice(clientId: string, subscriptionId?: string): Promise<ActionResult<{ note?: string }>> {
   const actor = await actorWith("discounts.apply");
   if (!actor) return FORBIDDEN;
   const client = await db.client.findUnique({ where: { id: clientId }, include: { package: true } });
-  if (!client?.stripeSubscriptionId) return { ok: false, error: "This client has no active Stripe subscription." };
-  const pkg = client.package;
+  const subId = subscriptionId ?? client?.stripeSubscriptionId;
+  if (!client || !subId) return { ok: false, error: "This client has no active Stripe subscription." };
+  // Which package this subscription is on (a client can pay for several packages).
+  const ref = await subscriptionRef(subId);
+  if (!ref || ref.client.id !== client.id) return { ok: false, error: "That subscription isn't one of this client's." };
+  const pkg = ref.package;
   if (!pkg) return { ok: false, error: "Link this client to a package first, so the portal knows the original price." };
   if (pkg.isCustom) return { ok: false, error: "Custom packages have no list price to go back to." };
   if (!pkg.stripePriceId) return { ok: false, error: `The ${pkg.name} package has no Stripe price yet. Add it on the Packages page first.` };
 
   const stripe = getStripe();
-  const sub = await stripe.subscriptions.retrieve(client.stripeSubscriptionId, {
+  const sub = await stripe.subscriptions.retrieve(subId, {
     expand: ["items.data.price.product", "discounts", "default_payment_method", "customer.invoice_settings.default_payment_method"],
   });
   if (sub.status === "canceled" || sub.status === "incomplete_expired") return { ok: false, error: "This subscription has ended." };
@@ -138,4 +159,31 @@ export async function planCardFeeLines(items: Stripe.SubscriptionItem[], sub: St
     return { item, action: "update", cents, why: `Changed the fixed card-fee line from ${old} to ${formatUsd(cents)} (${settings.rateBasisPoints / 100}% of ${formatUsd(listCents)}).` };
   });
   return { changes, key: changes.map((c) => `${c.item.id}:${c.action}:${c.cents ?? 0}`).join(",") };
+}
+
+/**
+ * Owners / Super Admin: make one of a client's subscriptions their main one (their bookkeeping package). The main
+ * subscription carries the client's package, status and "months already earned"; other packages have their own
+ * commission windows.
+ */
+export async function setMainSubscription(clientId: string, subscriptionId: string): Promise<ActionResult> {
+  const actor = await actorWith("ace.manage");
+  if (!actor) return FORBIDDEN;
+  const client = await db.client.findUnique({ where: { id: clientId } });
+  const row = await db.clientSubscription.findUnique({ where: { stripeSubscriptionId: subscriptionId } });
+  if (!client || !row || row.clientId !== clientId) return { ok: false, error: "That subscription isn't one of this client's." };
+  if (row.endedAt) return { ok: false, error: "That subscription has ended." };
+  if (client.stripeSubscriptionId === subscriptionId) return { ok: true };
+  // Keep the old main subscription's package on its own row before the client's package changes.
+  if (client.stripeSubscriptionId) {
+    await db.clientSubscription.upsert({
+      where: { stripeSubscriptionId: client.stripeSubscriptionId },
+      create: { clientId, stripeSubscriptionId: client.stripeSubscriptionId, packageId: client.packageId },
+      update: {},
+    });
+    await db.clientSubscription.updateMany({ where: { stripeSubscriptionId: client.stripeSubscriptionId, packageId: null }, data: { packageId: client.packageId } });
+  }
+  await db.client.update({ where: { id: clientId }, data: { stripeSubscriptionId: subscriptionId, subscriptionStatus: row.status, ...(row.packageId ? { packageId: row.packageId } : {}) } });
+  await writeAudit({ actorId: actor.id, action: "client_main_subscription_set", entity: "Client", entityId: clientId, before: { stripeSubscriptionId: client.stripeSubscriptionId }, after: { stripeSubscriptionId: subscriptionId } });
+  return { ok: true };
 }

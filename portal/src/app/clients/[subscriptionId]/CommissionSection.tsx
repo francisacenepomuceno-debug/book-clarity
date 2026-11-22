@@ -18,8 +18,18 @@ export async function CommissionSection({ clientId, formKey, role }: { clientId:
       <p className="muted">
         {progress.split.length > 0 ? `Now: ${progress.split.map((s) => `${s.executiveName} ${s.ratePercent}%`).join(" + ")} · ` : "No commission owner yet · "}
         {client.type === "ACE" ? "ACE months 1–6 paid as a lump sum when the batch is paid · " : ""}
+        {progress.otherPackages.length > 0 && <>{progress.mainPackageName ?? "Main package"}: </>}
         {progress.earnedMonths} of {progress.windowMonths} paid {client.type === "ACE" ? "autopay months (7–12)" : "months"} earned · {progress.remainingMonths} left
       </p>
+      {progress.otherPackages.length > 0 && (
+        <ul className="plain muted">
+          {progress.otherPackages.map((o) => (
+            <li key={o.subscriptionId}>
+              {o.packageName} (its own window): {o.earnedMonths} of {o.windowMonths} paid months earned · {o.remainingMonths} left{o.ended ? " · ended" : ""}
+            </li>
+          ))}
+        </ul>
+      )}
       {can(role, "commissions.markPaid") &&
         (executives.length === 0 ? (
           <p className="muted">Add executives on the <a href="/commissions">Commissions</a> page first.</p>

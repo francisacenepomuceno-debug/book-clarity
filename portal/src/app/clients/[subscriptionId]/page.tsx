@@ -13,7 +13,8 @@ import { OnboardingSection } from "./OnboardingSection";
 import { SuspensionSection } from "./SuspensionSection";
 import { PortalClientPage } from "./PortalClientPage";
 import { DiscountForm } from "./DiscountForm";
-import { LinkPackageForm, RevertPriceButton } from "./PriceSection";
+import { subscriptionRef, subscriptionsOf } from "@/clients/subscriptions";
+import { LinkPackageForm, MakeMainButton, RevertPriceButton } from "./PriceSection";
 
 export const dynamic = "force-dynamic";
 
@@ -29,10 +30,14 @@ export default async function ClientPage({ params }: { params: Promise<{ subscri
   const r = scopeRow((await withPricing([live]))[0], viewer.role);
 
   const invoices = money ? (await getStripe().invoices.list({ subscription: subscriptionId, limit: 12 })).data : [];
-  const client = await db.client.findUnique({ where: { stripeSubscriptionId: subscriptionId } });
+  // A client can pay for several packages, each its own subscription; this page is for one of them.
+  const ref = await subscriptionRef(subscriptionId);
+  const client = ref?.client ?? null;
   const canLink = can(viewer.role, "ace.manage");
   const packages = canLink ? await db.package.findMany({ orderBy: { name: "asc" } }) : [];
-  const linked = client?.packageId ? packages.find((x) => x.id === client.packageId) ?? null : null;
+  const linked = ref?.package ?? null;
+  const otherSubs = client ? (await subscriptionsOf(client)).filter((s) => s.subscriptionId !== subscriptionId && !s.endedAt) : [];
+  const otherNames = new Map((await db.package.findMany({ where: { id: { in: otherSubs.flatMap((s) => (s.packageId ? [s.packageId] : [])) } } })).map((p) => [p.id, p.name]));
   const discounts = money && client ? await db.discount.findMany({ where: { clientId: client.id }, orderBy: { createdAt: "desc" }, take: 5 }) : [];
 
   return (
@@ -46,6 +51,23 @@ export default async function ClientPage({ params }: { params: Promise<{ subscri
           {r.sixMonthContract && " · 6-month contract"} · next charge {fmtDate(r.nextChargeDate)}
           {r.email && <> · {r.email}</>}
         </p>
+        {ref && (!ref.isMain || otherSubs.length > 0) && (
+          <p className="muted">
+            {ref.isMain ? "Main package." : "An additional package, billed on its own schedule."}
+            {otherSubs.length > 0 && (
+              <>
+                {" "}Also pays for:{" "}
+                {otherSubs.map((s, i) => (
+                  <span key={s.subscriptionId}>
+                    {i > 0 && ", "}
+                    <a href={`/clients/${s.subscriptionId}`}>{(s.packageId && otherNames.get(s.packageId)) || s.productName || "another package"}</a>
+                    {s.isMain && " (main)"}
+                  </span>
+                ))}
+              </>
+            )}
+          </p>
+        )}
 
         {money && (
           <>
@@ -59,10 +81,11 @@ export default async function ClientPage({ params }: { params: Promise<{ subscri
             {canLink && client && (
               <section className="panel pad" id="price">
                 <h3>Package and price</h3>
+                {ref && !ref.isMain && <MakeMainButton clientId={client.id} subscriptionId={subscriptionId} />}
                 <LinkPackageForm
                   clientId={client.id}
                   subscriptionId={subscriptionId}
-                  packageId={client.packageId}
+                  packageId={ref?.packageId ?? null}
                   packages={packages.map((x) => ({ id: x.id, label: x.isCustom ? `${x.name} (Custom)` : `${x.name} · ${formatUsd(x.monthlyPriceCents)}/mo` }))}
                 />
                 {r.discounted ? (

@@ -230,7 +230,9 @@ export async function planImport(
     let willPost: string[] = [];
     if (shares.length) {
       const window = windowMonthsFor({ type: type ?? client.type });
-      const mine = paidInvoices.filter((p) => p.clientId === client.id && packagePaidCents(p) > 0);
+      // The main package's window (the one "months already earned" refers to); other packages have their own.
+      const mainSub = "stripeSubscriptionId" in client ? client.stripeSubscriptionId : null;
+      const mine = paidInvoices.filter((p) => p.clientId === client.id && packagePaidCents(p) > 0 && (!p.stripeSubscriptionId || !mainSub || p.stripeSubscriptionId === mainSub));
       const counted = mine.filter((p) => !settledThrough || p.paidAt! >= settledThrough);
       const already = counted.filter((p) => earned.has(p.id)).length;
       const room = Math.max(0, window - (monthsBeforePortal ?? client.commissionMonthsBeforePortal) - already);

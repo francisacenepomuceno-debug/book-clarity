@@ -30,6 +30,30 @@ export async function postingMonthFor(executiveId: string, eventMonth: string, t
   return nextMonth(latestPaid.month);
 }
 
+/**
+ * The commission window an invoice belongs to. A client can pay for several packages, each its own Stripe
+ * subscription; each has its own window (owner, 2026-11-22):
+ * - the main subscription (the client's bookkeeping package): 12 paid months for Direct clients, 6 after the ACE
+ *   months for ACE clients, less the months already earned before the portal;
+ * - any other package: its own 12 paid months from its first payment.
+ * Invoices with no subscription recorded (older rows) count as the main one.
+ */
+export function commissionGroup(client: { type: "DIRECT" | "ACE"; stripeSubscriptionId: string | null; commissionMonthsBeforePortal: number }, subscriptionId: string | null) {
+  const isMain = !subscriptionId || !client.stripeSubscriptionId || subscriptionId === client.stripeSubscriptionId;
+  if (isMain) {
+    return {
+      isMain,
+      windowMonths: windowMonthsFor(client),
+      monthsBefore: client.commissionMonthsBeforePortal,
+      // No main subscription known: every invoice counts as the main package.
+      invoiceWhere: (client.stripeSubscriptionId
+        ? { OR: [{ stripeSubscriptionId: null }, { stripeSubscriptionId: client.stripeSubscriptionId }] }
+        : {}) as Prisma.InvoiceWhereInput,
+    };
+  }
+  return { isMain, windowMonths: 12, monthsBefore: 0, invoiceWhere: { stripeSubscriptionId: subscriptionId } as Prisma.InvoiceWhereInput };
+}
+
 const isEarlier = (a: Invoice, b: Invoice) =>
   a.paidAt!.getTime() < b.paidAt!.getTime() || (a.paidAt!.getTime() === b.paidAt!.getTime() && a.id < b.id);
 
@@ -57,19 +81,22 @@ export async function recordPaymentCommission(invoiceRowId: string): Promise<num
     const split = splitAt(await tx.commissionShare.findMany({ where: { clientId } }), inv.paidAt);
     if (split.length === 0) return 0;
 
-    const windowMonths = windowMonthsFor(client);
+    // Each package (Stripe subscription) has its own commission window (owner, 2026-11-22).
+    const group = commissionGroup(client, inv.stripeSubscriptionId);
+    const windowMonths = group.windowMonths;
+    const groupInvoiceIds = (await tx.invoice.findMany({ where: { clientId, ...group.invoiceWhere }, select: { id: true } })).map((i) => i.id);
     // Hard cap: months earned before the portal + invoices that have already earned.
     const earnedInvoices = await tx.commissionEntry.findMany({
-      where: { clientId, kind: "EARNED" },
+      where: { clientId, kind: "EARNED", invoiceId: { in: groupInvoiceIds } },
       distinct: ["invoiceId"],
       select: { invoiceId: true },
     });
-    if (client.commissionMonthsBeforePortal + earnedInvoices.length >= windowMonths) return 0;
+    if (group.monthsBefore + earnedInvoices.length >= windowMonths) return 0;
 
     // Which paid month this is (chronological): months before the portal + earlier paid months with a package amount.
-    const paid = await tx.invoice.findMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { not: null }, backfilled: false } });
+    const paid = await tx.invoice.findMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { not: null }, backfilled: false, ...group.invoiceWhere } });
     const earlier = paid.filter((p) => p.id !== inv.id && packagePaidCents(p) > 0 && isEarlier(p, inv)).length;
-    const paidIndex = client.commissionMonthsBeforePortal + earlier + 1;
+    const paidIndex = group.monthsBefore + earlier + 1;
 
     const lines = earnedLines({ baseCents: base, paidIndex, windowMonths, split });
     if (lines.length === 0) return 0;

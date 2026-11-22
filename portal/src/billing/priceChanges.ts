@@ -12,6 +12,7 @@ import { sendNotice } from "@/notify/send";
 import { templates } from "@/notify/templates";
 import { planCardFeeLines } from "@/billing/pricing";
 import type { ActionResult } from "@/billing/discounts";
+import { activeSubscriptionsOnPackage } from "@/clients/subscriptions";
 
 const TZ = process.env.BUSINESS_TZ ?? "America/New_York";
 const DAY = 86400_000;
@@ -115,8 +116,8 @@ const productName = (it: Stripe.SubscriptionItem) => {
 type Outcome = "noticed" | "moved" | "waiting" | "not_eligible";
 
 /** One current client: send the notice when it's due, and move them once their next bill is the first new-price one. */
-async function processClient(change: PriceChange & { package: { name: string } }, client: Client, now: Date, stripe: Stripe): Promise<Outcome[]> {
-  const sub = await stripe.subscriptions.retrieve(client.stripeSubscriptionId!, {
+async function processClient(change: PriceChange & { package: { name: string } }, client: Client, subscriptionId: string, now: Date, stripe: Stripe): Promise<Outcome[]> {
+  const sub = await stripe.subscriptions.retrieve(subscriptionId, {
     expand: ["items.data.price.product", "discounts", "default_payment_method", "customer.invoice_settings.default_payment_method"],
   });
   if (sub.status === "canceled" || sub.status === "incomplete_expired") return ["not_eligible"];
@@ -134,7 +135,8 @@ async function processClient(change: PriceChange & { package: { name: string } }
   if (!periodEnd.getTime()) return ["not_eligible"];
   const startsOn = firstBillOnOrAfter(periodEnd, change.effectiveAt);
   const out: Outcome[] = [];
-  const key = `price-increase:${change.id}:${client.id}`;
+  // One notice per client and package (an extra package of the same client gets its own).
+  const key = subscriptionId === client.stripeSubscriptionId ? `price-increase:${change.id}:${client.id}` : `price-increase:${change.id}:${client.id}:${subscriptionId}`;
 
   if (now >= noticeDueAt(startsOn)) {
     const t = templates.priceIncrease({
@@ -207,16 +209,17 @@ export async function runPriceChanges(now: Date = new Date()) {
       await writeAudit({ actorId: null, action: "package_price_switched", entity: "Package", entityId: change.packageId, before, after: { monthlyPriceCents: change.newMonthlyCents, stripePriceId: change.newStripePriceId } });
       counts.switched++;
     }
-    const moved = new Set(change.moves.map((m) => m.clientId));
-    const clients = await db.client.findMany({ where: { packageId: change.packageId, stripeSubscriptionId: { not: null }, endedAt: null } });
-    for (const client of clients.filter((c) => !moved.has(c.id))) {
+    // Every running subscription on this package: a client's main one and any extra ones.
+    const moved = new Set(change.moves.map((m) => m.subscriptionId));
+    const subs = await activeSubscriptionsOnPackage(change.packageId);
+    for (const { client, subscriptionId } of subs.filter((s) => !moved.has(s.subscriptionId))) {
       try {
-        const r = await processClient(change, client, now, stripe);
+        const r = await processClient(change, client, subscriptionId, now, stripe);
         if (r.includes("noticed")) counts.noticed++;
         if (r.includes("moved")) counts.moved++;
       } catch (e) {
         counts.failed++;
-        console.error(`[price-change] ${change.id} client ${client.id}:`, (e as Error).message);
+        console.error(`[price-change] ${change.id} client ${client.id} ${subscriptionId}:`, (e as Error).message);
       }
     }
   }
