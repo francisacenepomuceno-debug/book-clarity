@@ -94,3 +94,26 @@ export async function unassignedClients(): Promise<{ id: string; name: string; s
     orderBy: { name: "asc" },
   });
 }
+
+/**
+ * Owners / Super Admin: paid months of a client's additional package that already earned commission before the
+ * portal (each package has its own 12-month window). Records any commission now due on that package.
+ */
+export async function setPackageMonthsBeforePortal(subscriptionId: string, months: number): Promise<ActionResult> {
+  let actor;
+  try {
+    actor = await requirePermission("commissions.markPaid");
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { ok: false, error: "You don't have permission to do that." };
+    throw e;
+  }
+  if (!Number.isInteger(months) || months < 0 || months > 12) return { ok: false, error: "Months already earned must be a whole number from 0 to 12." };
+  const row = await db.clientSubscription.findUnique({ where: { stripeSubscriptionId: subscriptionId }, include: { client: true } });
+  if (!row) return { ok: false, error: "Package not found. Refresh and try again." };
+  if (row.client.stripeSubscriptionId === subscriptionId) return { ok: false, error: "This is the main package: set its months in the commission form above." };
+  if (row.commissionMonthsBeforePortal === months) return { ok: true };
+  await db.clientSubscription.update({ where: { id: row.id }, data: { commissionMonthsBeforePortal: months } });
+  await writeAudit({ actorId: actor.id, action: "package_commission_months_set", entity: "Client", entityId: row.clientId, before: { subscriptionId, months: row.commissionMonthsBeforePortal }, after: { subscriptionId, months } });
+  await recomputeClient(row.clientId);
+  return { ok: true };
+}

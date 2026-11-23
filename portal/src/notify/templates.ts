@@ -190,6 +190,20 @@ export const templates = {
     };
   },
 
+  outsidePaymentDue(i: { clientName: string; amount: string; dueOn: string; daysUntil: number; method: string | null; url: string }): { subject: string; html: string } {
+    const when = i.daysUntil <= 0 ? "is due today" : i.daysUntil === 1 ? "is due tomorrow" : `is due in ${i.daysUntil} days`;
+    return {
+      subject: `Check payment: ${i.clientName} ${when} (${i.amount})`,
+      html: html(
+        [
+          `<strong>${esc(i.clientName)}</strong> pays outside Stripe${i.method ? ` (${esc(i.method)})` : ""}. Their payment of <strong>${esc(i.amount)}</strong> ${when}, on <strong>${esc(i.dueOn)}</strong>.`,
+          `Please check whether it has been received. Once it has, mark it paid in the portal so reports and commission include it.`,
+        ],
+        { label: "Open payments outside Stripe", url: i.url },
+      ),
+    };
+  },
+
   priceIncrease(i: { name: string; packageName: string; oldAmount: string; newAmount: string; startsOn: string }): Message {
     return {
       subject: "An update to your Book Clarity monthly price",

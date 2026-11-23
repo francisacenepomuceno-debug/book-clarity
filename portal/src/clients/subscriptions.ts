@@ -47,17 +47,18 @@ export async function subscriptionRef(subscriptionId: string): Promise<Subscript
 }
 
 /** Every subscription the portal knows for a client (main first), including the main one if it has no row yet. */
-export async function subscriptionsOf(client: Client): Promise<{ subscriptionId: string; packageId: string | null; productName: string | null; endedAt: Date | null; isMain: boolean }[]> {
+export async function subscriptionsOf(client: Client): Promise<{ subscriptionId: string; packageId: string | null; productName: string | null; monthsBeforePortal: number; endedAt: Date | null; isMain: boolean }[]> {
   const rows = await db.clientSubscription.findMany({ where: { clientId: client.id }, orderBy: { createdAt: "asc" } });
   const out = rows.map((r) => ({
     subscriptionId: r.stripeSubscriptionId,
     packageId: r.packageId ?? (r.stripeSubscriptionId === client.stripeSubscriptionId ? client.packageId : null),
     productName: r.productName,
+    monthsBeforePortal: r.commissionMonthsBeforePortal,
     endedAt: r.endedAt,
     isMain: r.stripeSubscriptionId === client.stripeSubscriptionId,
   }));
   if (client.stripeSubscriptionId && !out.some((s) => s.isMain)) {
-    out.push({ subscriptionId: client.stripeSubscriptionId, packageId: client.packageId, productName: null, endedAt: client.endedAt, isMain: true });
+    out.push({ subscriptionId: client.stripeSubscriptionId, packageId: client.packageId, productName: null, monthsBeforePortal: 0, endedAt: client.endedAt, isMain: true });
   }
   return out.sort((a, b) => Number(b.isMain) - Number(a.isMain));
 }

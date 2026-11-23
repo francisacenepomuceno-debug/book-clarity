@@ -1,13 +1,17 @@
 import type { Role } from "@prisma/client";
 import { logoutAction } from "@/auth/actions";
 import { can } from "@/auth/permissions";
+import { outsideDueCount } from "@/billing/outsideDue";
 
 const TZ = process.env.BUSINESS_TZ ?? "America/New_York";
 
-export function PortalHeader(p: { viewerName: string; role: Role; livemode?: boolean; fetchedAt?: Date; refreshHref?: string }) {
+export async function PortalHeader(p: { viewerName: string; role: Role; livemode?: boolean; fetchedAt?: Date; refreshHref?: string }) {
+  // In-app reminder: outside-Stripe bills due within 7 days or overdue.
+  const outsideDue = can(p.role, "discounts.apply") ? await outsideDueCount() : 0;
   const links = [
     can(p.role, "onboarding.view") && { href: "/onboarding", label: "Onboarding" },
     can(p.role, "payments.view") && { href: "/payments", label: "Payments" },
+    can(p.role, "discounts.apply") && { href: "/payments/outside", label: outsideDue ? `Outside payments (${outsideDue} due)` : "Outside payments" },
     can(p.role, "reports.view") && { href: "/reports", label: "Reports" },
     can(p.role, "commissions.view") && { href: "/commissions", label: "Commissions" },
     can(p.role, "ace.manage") && { href: "/ace", label: "ACE" },

@@ -15,8 +15,10 @@ export const AT_RISK_DAYS = 21;
 export const baseUrl = () => process.env.PORTAL_BASE_URL ?? "http://localhost:3000";
 
 /** Payment reminders never go to ended clients or to ACE clients inside their prepaid period. */
-export function remindable(c: Pick<Client, "type" | "endedAt" | "acePrepaidUntil">, now: Date): boolean {
+export function remindable(c: Pick<Client, "type" | "endedAt" | "acePrepaidUntil"> & { paysOutsideStripe?: boolean }, now: Date): boolean {
   if (c.endedAt && c.endedAt <= now) return false;
+  // Pays outside Stripe: the Super Admin is reminded instead (billing/outsidePayments.ts).
+  if (c.paysOutsideStripe) return false;
   // An ACE client without a prepaid date yet (e.g. imported, slot not filled in) is treated as prepaid.
   if (c.type === "ACE" && !c.acePrepaidUntil) return false;
   if (c.acePrepaidUntil && c.acePrepaidUntil > now) return false;

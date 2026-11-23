@@ -9,6 +9,8 @@ import { linkClientPackage, revertToListPrice, setMainSubscription } from "@/bil
 import { runPriceChanges, schedulePriceIncrease } from "@/billing/priceChanges";
 import type { LiveClientRow } from "@/stripe/mapSubscription";
 import { fillInvoiceSubscriptions } from "@/clients/invoiceSubscriptions";
+import { setPackageMonthsBeforePortal } from "@/commissions/splits";
+import { applyImport, planImport } from "@/migration/commissionImport";
 import { resetDb } from "../helpers/db";
 
 const sessionRef: { current: unknown } = { current: null };
@@ -71,7 +73,7 @@ describe("a client with two packages billed on different days", () => {
     expect(arapEarned).toBe(12); // its own 12 paid months
     const p = await commissionProgress(clientId);
     expect(p).toMatchObject({ windowMonths: 12, earnedMonths: 12, remainingMonths: 0, mainPackageName: "Growth" });
-    expect(p.otherPackages).toEqual([{ subscriptionId: ARAP_SUB, packageName: "Custom AR/AP", ended: false, windowMonths: 12, earnedMonths: 12, remainingMonths: 0 }]);
+    expect(p.otherPackages).toEqual([{ subscriptionId: ARAP_SUB, packageName: "Custom AR/AP", ended: false, monthsBeforePortal: 0, windowMonths: 12, earnedMonths: 12, remainingMonths: 0 }]);
   });
 
   it("older invoices with no subscription recorded count toward the main package", async () => {
@@ -162,5 +164,32 @@ describe("a client with two packages billed on different days", () => {
     expect((await db.invoice.findUniqueOrThrow({ where: { id: a.id } })).stripeSubscriptionId).toBe(GROWTH_SUB);
     expect((await db.invoice.findUniqueOrThrow({ where: { id: b.id } })).stripeSubscriptionId).toBe(ARAP_SUB);
     expect(await fillInvoiceSubscriptions(300, { invoices: { retrieve } } as unknown as Stripe)).toBe(0);
+  });
+
+  it("an additional package can have months already earned (Shavonn's AR/AP: 7), so it earns for 5 more", async () => {
+    expect(await setPackageMonthsBeforePortal(ARAP_SUB, 7)).toEqual({ ok: true });
+    expect((await setPackageMonthsBeforePortal(GROWTH_SUB, 3)).ok).toBe(false); // the main package uses the client's setting
+    as("ADMIN");
+    expect((await setPackageMonthsBeforePortal(ARAP_SUB, 1)).ok).toBe(false);
+    as("OWNER");
+    let arapEarned = 0;
+    for (let m = 1; m <= 8; m++) arapEarned += (await recordPaymentCommission((await paid(ARAP_SUB, `2027-0${m}-15T15:00:00Z`, 60000)).id)) > 0 ? 1 : 0;
+    expect(arapEarned).toBe(5);
+    const other = (await commissionProgress(clientId)).otherPackages[0];
+    expect(other).toMatchObject({ monthsBeforePortal: 7, earnedMonths: 12, remainingMonths: 0 });
+  });
+
+  it("the import sets an additional package's months by its subscription ID", async () => {
+    const plan = await planImport(`client,months_already_earned\n${ARAP_SUB},7\n${GROWTH_SUB},6`, { createMissingExecutives: false });
+    expect(plan.problems).toEqual([]);
+    expect(plan.ready.map((r) => [r.clientName, r.packageSubscriptionId ?? null, r.monthsBeforePortal])).toEqual([
+      ["Shavonn Richardson (additional package)", ARAP_SUB, 7],
+      ["Shavonn Richardson", null, 6],
+    ]);
+    expect(await applyImport(plan.ready)).toMatchObject({ applied: 2, failed: [] });
+    expect((await db.clientSubscription.findUniqueOrThrow({ where: { stripeSubscriptionId: ARAP_SUB } })).commissionMonthsBeforePortal).toBe(7);
+    expect((await db.client.findUniqueOrThrow({ where: { id: clientId } })).commissionMonthsBeforePortal).toBe(6);
+    const bad = await planImport(`client,executive_1,rate_1,months_already_earned\n${ARAP_SUB},Jose,10,7`, { createMissingExecutives: false });
+    expect(bad.problems[0].error).toMatch(/only months_already_earned/);
   });
 });
