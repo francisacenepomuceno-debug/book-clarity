@@ -192,13 +192,16 @@ async function login(browser, email, password, totpSecret) {
     await client.check("input[name=confirmDetails]");
     await client.check("input[name=agreeAutopay]");
     await client.check("input[name=quickbooks] >> nth=0");
+    // Draw signature is the default; this test signs by typing the name.
+    await client.click("label:has-text('Type name')");
     await client.fill("input[name=signerName]", "Sam Smoke");
-    await client.click("text=Sign agreement");
+    await client.click("button:has-text('Sign agreement')");
     await client.waitForSelector("text=Bank account (ACH)", { timeout: 30000 });
     check("after signing, the client chooses bank or card for the onboarding fee", await client.isVisible("text=Card"));
     const onb = await db.onboarding.findFirst({ where: { client: { name: onbName } } });
     check("signed text and fingerprint are stored", Boolean(onb && onb.signedText && onb.signedHash));
     await owner.goto(`${BASE}/contracts/${onb.id}`);
+    await owner.click("label:has-text('Type name')");
     await owner.click("button:has-text('Countersign')");
     await owner.waitForSelector("text=Countersigned by", { timeout: 30000 });
     check("an owner can countersign", await owner.isVisible("text=Countersigned by"));
