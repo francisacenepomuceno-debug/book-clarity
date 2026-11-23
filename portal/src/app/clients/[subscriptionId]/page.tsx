@@ -15,6 +15,8 @@ import { PortalClientPage } from "./PortalClientPage";
 import { DiscountForm } from "./DiscountForm";
 import { subscriptionRef, subscriptionsOf } from "@/clients/subscriptions";
 import { LinkPackageForm, MakeMainButton, RevertPriceButton } from "./PriceSection";
+import { PaysOutsideForm } from "@/app/payments/outside/Forms";
+import { OUTSIDE_METHODS } from "@/billing/outsidePayments";
 
 export const dynamic = "force-dynamic";
 
@@ -107,6 +109,14 @@ export default async function ClientPage({ params }: { params: Promise<{ subscri
                 ) : (
                   <p className="muted">{linked ? (linked.isCustom ? "Custom package: no list price to compare." : `Paying the ${linked.name} list price.`) : "Not linked to a package yet."}</p>
                 )}
+              </section>
+            )}
+
+            {can(viewer.role, "discounts.apply") && client && (
+              <section className="panel pad">
+                <h3>How they pay</h3>
+                <p className="muted">Tick this for a client who pays by Zelle, check, PayPal, bill.com, wire or cash. Stripe keeps their billing dates; the Super Admin is reminded 7 days before, 1 day before and on each due date to check for the payment, and marks it paid on <a href="/payments/outside">Payments outside Stripe</a>. They get no automatic payment emails and are never auto-suspended.</p>
+                <PaysOutsideForm clientId={client.id} pageKey={subscriptionId} on={client.paysOutsideStripe} method={client.outsidePaymentMethod} methods={OUTSIDE_METHODS} />
               </section>
             )}
 

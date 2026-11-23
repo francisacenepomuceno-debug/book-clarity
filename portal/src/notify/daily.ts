@@ -5,6 +5,7 @@ import { runOnboardingReminders } from "@/onboarding/reminders";
 import { runSuspensions } from "@/billing/suspension";
 import { runPriceChanges } from "@/billing/priceChanges";
 import { fillInvoiceSubscriptions } from "@/clients/invoiceSubscriptions";
+import { runOutsidePaymentReminders } from "@/billing/outsidePayments";
 
 async function safely<T>(name: string, f: () => Promise<T>): Promise<T | { error: string }> {
   try {
@@ -25,11 +26,12 @@ export async function runDaily(now: Date = new Date()) {
   const aceBatches = await safely("aceBatches", () => runAceBatchReminders(now));
   const onboarding = await safely("onboarding", () => runOnboardingReminders(now));
   const priceChanges = await safely("priceChanges", () => runPriceChanges(now));
+  const outsidePayments = await safely("outsidePayments", () => runOutsidePaymentReminders(now));
   // After the reminders, so a client gets the day-14 notice etc. before being suspended.
   const suspensions = await safely("suspensions", () => runSuspensions(now));
   // Notices that started sending but never finished (process died); they're not retried blindly
   // because the message may have gone out — surfaced here instead.
   const stuckNotices = await db.notification.count({ where: { status: "PENDING", createdAt: { lt: new Date(now.getTime() - 3600_000) } } });
   if (stuckNotices > 0) console.warn(`[daily] ${stuckNotices} notice(s) stuck mid-send; check the Notification log`);
-  return { invoiceSubscriptions, payments, ace, aceBatches, onboarding, priceChanges, suspensions, stuckNotices };
+  return { invoiceSubscriptions, payments, ace, aceBatches, onboarding, priceChanges, outsidePayments, suspensions, stuckNotices };
 }

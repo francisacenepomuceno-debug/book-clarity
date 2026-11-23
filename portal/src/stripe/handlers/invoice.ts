@@ -54,7 +54,8 @@ export async function upsertInvoiceFromStripe(
     onboardingCents,
     taxCents,
     totalCents: inv.total,
-    amountPaidCents: inv.amount_paid ?? 0,
+    // Marked "paid out of band" (paid outside Stripe): the whole invoice is paid.
+    amountPaidCents: (inv as { paid_out_of_band?: boolean }).paid_out_of_band && inv.status === "paid" ? inv.total : inv.amount_paid ?? 0,
     paidAt: fromTs(inv.status_transitions?.paid_at),
     periodStart: fromTs(inv.period_start) ?? new Date(),
     periodEnd: fromTs(inv.period_end) ?? new Date(),

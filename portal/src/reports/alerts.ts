@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { outsideDueInvoices } from "@/billing/outsideDue";
 import { fmtDate } from "@/lib/format";
 import { CONTINUATION_NOTICE_DAYS } from "@/domain/ace";
 
@@ -8,7 +9,7 @@ export const DISCOUNT_ENDING_DAYS = 30;
 export const STUCK_ONBOARDING_DAYS = 3;
 
 export type AlertGroup = {
-  kind: "declines" | "atRisk" | "aceMonth6" | "aceEnded" | "openSlots" | "discountsEnding" | "stuckOnboarding" | "countersign";
+  kind: "declines" | "atRisk" | "aceMonth6" | "aceEnded" | "outsidePayments" | "openSlots" | "discountsEnding" | "stuckOnboarding" | "countersign";
   title: string;
   items: { name: string; detail: string; href: string }[];
 };
@@ -23,7 +24,7 @@ function addMonths(d: Date, months: number): Date {
 
 /** What needs an Owner's attention today (spec §12). Empty groups are left out. */
 export async function dashboardAlerts(now: Date = new Date()): Promise<AlertGroup[]> {
-  const [declined, risky, aceSoon, aceEnded, openSlots, discounts, stuck, unsigned] = await Promise.all([
+  const [declined, risky, aceSoon, aceEnded, openSlots, discounts, stuck, unsigned, outside] = await Promise.all([
     db.invoice.findMany({
       where: { kind: "SUBSCRIPTION", status: "open", firstFailedAt: { gte: new Date(now.getTime() - DECLINE_LOOKBACK_DAYS * DAY) }, client: { endedAt: null } },
       include: { client: true },
@@ -41,6 +42,7 @@ export async function dashboardAlerts(now: Date = new Date()): Promise<AlertGrou
     db.discount.findMany({ where: { replacedAt: null, client: { endedAt: null } }, include: { client: true } }),
     db.onboarding.findMany({ where: { completedAt: null, lastProgressAt: { lte: new Date(now.getTime() - STUCK_ONBOARDING_DAYS * DAY) }, client: { endedAt: null } }, include: { client: true } }),
     db.onboarding.findMany({ where: { signedAt: { not: null }, countersignedAt: null, client: { endedAt: null } }, include: { client: true } }),
+    outsideDueInvoices(now),
   ]);
   const batches = openSlots.length ? await db.aceBatch.findMany({ where: { id: { in: openSlots.map((s) => s.batchId) } } }) : [];
   const batchName = new Map(batches.map((b) => [b.id, b.note?.trim() || `Batch of ${fmtDate(b.purchasedAt)}`]));
@@ -65,6 +67,11 @@ export async function dashboardAlerts(now: Date = new Date()): Promise<AlertGrou
       kind: "aceEnded",
       title: "ACE prepaid time ended, no decision yet (not being billed)",
       items: aceEnded.map((c) => ({ name: c.name, detail: `prepaid ended ${fmtDate(c.acePrepaidUntil)}${c.clientAnswer === "YES" ? " · client said yes" : ""}`, href: clientHref(c) })),
+    },
+    {
+      kind: "outsidePayments",
+      title: "Payments outside Stripe to check (due within 7 days or overdue)",
+      items: outside.map((i) => ({ name: i.client!.name, detail: `${i.client!.outsidePaymentMethod ?? "outside Stripe"} · due ${fmtDate(i.dueAt ?? i.billedAt)}`, href: "/payments/outside" })),
     },
     {
       kind: "openSlots",

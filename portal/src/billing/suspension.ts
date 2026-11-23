@@ -35,6 +35,8 @@ export async function runSuspensions(now: Date = new Date(), stripe: Stripe = ge
         suspendedAt: null,
         endedAt: null,
         stripeSubscriptionId: { not: null },
+        // Payments made outside Stripe are checked by hand; never auto-suspend those clients.
+        paysOutsideStripe: false,
         OR: [{ acePrepaidUntil: null }, { acePrepaidUntil: { lte: now } }],
       },
     },

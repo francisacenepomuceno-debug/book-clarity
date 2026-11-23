@@ -163,6 +163,10 @@ model Client {
   onboarding                   Onboarding?
   createdAt                    DateTime             @default(now())
   endedAt                      DateTime?
+  /// Pays by Zelle, check, PayPal, bill.com, wire… instead of through Stripe. Their Stripe subscription still sets
+  /// the billing dates; the Super Admin is reminded before each due date and marks the payment by hand.
+  paysOutsideStripe            Boolean              @default(false)
+  outsidePaymentMethod         String?
   invoices                     Invoice[]
   subscriptions                ClientSubscription[]
   discounts                    Discount[]
@@ -206,6 +210,11 @@ model Invoice {
    */
   backfilled           Boolean     @default(false)
   kind                 InvoiceKind
+  /// Paid outside Stripe (marked by hand; the Stripe invoice is marked "paid out of band").
+  paidOutsideAt        DateTime?
+  outsideMethod        String?
+  outsideReference     String?
+  outsideMarkedById    String?
 
   @@index([paidAt])
   @@index([billedAt])
