@@ -43,9 +43,12 @@ export async function backfillInvoices(stripe: Stripe, since: Date): Promise<{ s
     }
     const latest = [...subs].sort((a, b) => (b.ended_at ?? 0) - (a.ended_at ?? 0))[0];
     const cus = (await stripe.customers.retrieve(customer)) as Stripe.Customer;
-    await db.client.upsert({
-      where: { stripeCustomerId: customer },
-      create: {
+    if (await db.client.findFirst({ where: { stripeCustomerId: customer } })) {
+      known.add(customer);
+      return true;
+    }
+    await db.client.create({
+      data: {
         name: cus.name || cus.email || customer,
         email: cus.email ?? null,
         stripeCustomerId: customer,
@@ -54,7 +57,6 @@ export async function backfillInvoices(stripe: Stripe, since: Date): Promise<{ s
         startedAt: fromTs(Math.min(...subs.map((s) => s.start_date))),
         subscriptionStatus: latest.status,
       },
-      update: {},
     });
     known.add(customer);
     clientsAdded++;

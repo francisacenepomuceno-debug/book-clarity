@@ -68,3 +68,24 @@ export function waivedFeeTemplate(template: string): string {
     .replaceAll("begins 14 days after the onboarding fee is paid", "begins when you sign up")
     .replaceAll(" (14 days after the onboarding fee is paid)", "");
 }
+
+/**
+ * Pure: a package contract reworded for an ACE client (owner, 2026-11-23). ACE prepays the first 6 months including
+ * onboarding, so nothing is charged at signup; billing starts only if the client agrees to continue after the ACE
+ * period and sets up a payment method.
+ */
+export function aceTemplate(template: string): string {
+  return template
+    .replace(
+      "Monthly billing for all Bookkeeping Retainers begins 14 days after the onboarding fee is paid and recurs on that same date each month (your monthly billing date).",
+      "Your first 6 months of service, including onboarding, are prepaid through the ACE program, so nothing is billed to you during that time. Monthly billing begins only if you agree to continue after the ACE period ends and set up a payment method for auto-pay; it then recurs on that same date each month (your monthly billing date).",
+    )
+    .replace(
+      "Your onboarding fee of {{onboarding_fee}} is charged when you sign up. Your first monthly retainer of {{monthly_amount}} is charged 14 days later, on your monthly billing date.",
+      "There is no onboarding fee and nothing is charged when you sign up. If you choose to continue after the ACE period, your monthly retainer of {{monthly_amount}} is charged on your monthly billing date.",
+    )
+    .replace(
+      "I {{signer_name}} authorize Book Clarity, LLC to electronically debit my bank account or credit card account used through the secure payment portal with Stripe for the onboarding fee invoice upon signing, in the amount of {{onboarding_fee}}, and to continue auto-debiting the amount of {{monthly_amount}} each month on my monthly billing date (14 days after the onboarding fee is paid) thereafter.",
+      "I {{signer_name}} understand that my first 6 months of service are prepaid through the ACE program and that nothing will be charged to me now. If I agree to continue after the ACE period, I will set up a payment method through the secure payment portal with Stripe and authorize Book Clarity, LLC to auto-debit the amount of {{monthly_amount}} each month on my monthly billing date from then on.",
+    );
+}

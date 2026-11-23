@@ -7,12 +7,15 @@ export async function onCustomerUpdated(
   cus: Stripe.Customer,
   getPaymentMethodFunding: (pmId: string) => Promise<string | null>,
 ): Promise<void> {
-  const client = await db.client.findUnique({ where: { stripeCustomerId: cus.id } });
-  if (!client) return;
+  // Every company sharing this Stripe customer.
+  const clients = await db.client.findMany({ where: { stripeCustomerId: cus.id } });
+  if (!clients.length) return;
   const pmId = idOf(cus.invoice_settings?.default_payment_method as string | null);
   const funding = pmId ? await getPaymentMethodFunding(pmId) : null;
-  const billingState = cus.address?.state ?? client.billingState;
-  if (funding !== client.defaultPaymentFunding || billingState !== client.billingState) {
-    await db.client.update({ where: { id: client.id }, data: { defaultPaymentFunding: funding, billingState } });
+  for (const client of clients) {
+    const billingState = cus.address?.state ?? client.billingState;
+    if (funding !== client.defaultPaymentFunding || billingState !== client.billingState) {
+      await db.client.update({ where: { id: client.id }, data: { defaultPaymentFunding: funding, billingState } });
+    }
   }
 }

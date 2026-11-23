@@ -82,3 +82,20 @@ export async function activeSubscriptionsOnPackage(packageId: string): Promise<{
       .map((m) => ({ client: m, subscriptionId: m.stripeSubscriptionId! })),
   ];
 }
+
+/**
+ * The client (company) behind something Stripe sends. Several companies can share one Stripe customer, each with
+ * its own subscriptions, so the subscription decides first; otherwise the customer's first client.
+ */
+export async function clientForStripe(customerId: string | null, subscriptionId: string | null): Promise<Client | null> {
+  // A subscription always belongs to one customer: only trust the match when the customer agrees.
+  const sameCustomer = (c: Client) => !customerId || !c.stripeCustomerId || c.stripeCustomerId === customerId;
+  if (subscriptionId) {
+    const row = await db.clientSubscription.findUnique({ where: { stripeSubscriptionId: subscriptionId }, include: { client: true } });
+    if (row && sameCustomer(row.client)) return row.client;
+    const main = await db.client.findFirst({ where: { stripeSubscriptionId: subscriptionId } });
+    if (main && sameCustomer(main)) return main;
+  }
+  if (!customerId) return null;
+  return db.client.findFirst({ where: { stripeCustomerId: customerId }, orderBy: { createdAt: "asc" } });
+}

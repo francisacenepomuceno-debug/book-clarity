@@ -1,4 +1,5 @@
 import type Stripe from "stripe";
+import { clientForStripe } from "@/clients/subscriptions";
 import type { Client } from "@prisma/client";
 import { db } from "@/lib/db";
 import { sendNotice } from "@/notify/send";
@@ -30,7 +31,7 @@ const recipient = (c: Client) => ({ name: c.name, email: c.email, phone: c.phone
 /** Stripe invoice.upcoming (about 3 days before a renewal): "your payment is coming up". */
 export async function onUpcomingInvoice(inv: Stripe.Invoice, now: Date = new Date()): Promise<void> {
   if (inv.collection_method === "send_invoice") return;
-  const client = await db.client.findUnique({ where: { stripeCustomerId: idOf(inv.customer as string) ?? "" } });
+  const client = await clientForStripe(idOf(inv.customer as string), subscriptionIdOf(inv));
   if (!client || !remindable(client, now) || client.subscriptionStatus === "paused") return;
   const sub = subscriptionIdOf(inv) ?? "none";
   const when = new Date(((inv.next_payment_attempt ?? inv.period_end) as number) * 1000);

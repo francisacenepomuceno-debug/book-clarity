@@ -32,8 +32,8 @@ describe("client sync links packages", () => {
       ({ customerId, subscriptionId: `sub_${customerId}`, name: customerId, email: null, status: "CURRENT", packageName: "", sixMonthContract: false, packageMonthlyCents: 0, cardFeeMonthlyCents: 0, hasDiscount: false, autopay: true, paymentMethod: "", nextChargeDate: null, amountDueCents: 0, pastDueSince: null, priceItems: items }) as never;
     await db.client.create({ data: { name: "Manual", stripeCustomerId: "cus_m", packageId: e.id } });
     await syncClientsFromSnapshot([row("cus_new", [{ priceId: "x", productName: "Growth Package" }]), row("cus_m", [{ priceId: "x", productName: "Growth Package" }])]);
-    expect((await db.client.findUniqueOrThrow({ where: { stripeCustomerId: "cus_new" } })).packageId).toBe(g.id);
-    expect((await db.client.findUniqueOrThrow({ where: { stripeCustomerId: "cus_m" } })).packageId).toBe(e.id);
+    expect((await db.client.findFirstOrThrow({ where: { stripeCustomerId: "cus_new" } })).packageId).toBe(g.id);
+    expect((await db.client.findFirstOrThrow({ where: { stripeCustomerId: "cus_m" } })).packageId).toBe(e.id);
     const existing = await db.client.create({ data: { name: "Existing", stripeCustomerId: "cus_e" } });
     await syncClientsFromSnapshot([row("cus_e", [{ priceId: "x", productName: "Essentials Package" }])]);
     expect((await db.client.findUniqueOrThrow({ where: { id: existing.id } })).packageId).toBe(e.id);
