@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { addExecutiveAction, markPaidAction, setCommissionAction, type FormResult } from "./actions";
+import { addExecutiveAction, markPaidAction, setCommissionAction, setPackageMonthsAction, type FormResult } from "./actions";
 
 export function AddExecutiveForm() {
   const [s, action, pending] = useActionState<FormResult, FormData>(addExecutiveAction, {});
@@ -68,6 +68,21 @@ export function CommissionForm(p: {
       <button disabled={pending}>{pending ? "Saving…" : "Save commission"}</button>
       {s.error && <p className="form-error">{s.error}</p>}
       {s.ok && <p className="form-ok">Saved. Any commission now due has been added.</p>}
+    </form>
+  );
+}
+
+/** Paid months of an additional package that already earned commission before the portal. */
+export function PackageMonthsForm(p: { subscriptionId: string; pageKey: string; months: number }) {
+  const [s, action, pending] = useActionState<FormResult, FormData>(setPackageMonthsAction, {});
+  return (
+    <form action={action} className="row-form">
+      <input type="hidden" name="packageSubscriptionId" value={p.subscriptionId} />
+      <input type="hidden" name="pageKey" value={p.pageKey} />
+      <label className="muted">Months earned before the portal <input type="number" name="months" min={0} max={12} step={1} defaultValue={p.months} style={{ width: 70 }} /></label>
+      <button className="secondary" disabled={pending}>Save</button>
+      {s.ok && <span className="form-ok">Saved.</span>}
+      {s.error && <span className="form-error">{s.error}</span>}
     </form>
   );
 }

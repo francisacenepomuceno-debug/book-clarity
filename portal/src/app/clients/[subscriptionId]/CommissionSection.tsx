@@ -3,7 +3,7 @@ import { can } from "@/auth/permissions";
 import { commissionProgress } from "@/commissions/statements";
 import { db } from "@/lib/db";
 import { todayInTz } from "@/lib/format";
-import { CommissionForm } from "@/app/commissions/Forms";
+import { CommissionForm, PackageMonthsForm } from "@/app/commissions/Forms";
 
 /** Commission owner/split and progress for one client (Owners and Super Admin only). */
 export async function CommissionSection({ clientId, formKey, role }: { clientId: string; formKey: string; role: Role }) {
@@ -26,6 +26,7 @@ export async function CommissionSection({ clientId, formKey, role }: { clientId:
           {progress.otherPackages.map((o) => (
             <li key={o.subscriptionId}>
               {o.packageName} (its own window): {o.earnedMonths} of {o.windowMonths} paid months earned · {o.remainingMonths} left{o.ended ? " · ended" : ""}
+              {can(role, "commissions.markPaid") && <PackageMonthsForm subscriptionId={o.subscriptionId} pageKey={formKey} months={o.monthsBeforePortal} />}
             </li>
           ))}
         </ul>

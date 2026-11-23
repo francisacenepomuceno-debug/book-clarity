@@ -38,7 +38,12 @@ export async function postingMonthFor(executiveId: string, eventMonth: string, t
  * - any other package: its own 12 paid months from its first payment.
  * Invoices with no subscription recorded (older rows) count as the main one.
  */
-export function commissionGroup(client: { type: "DIRECT" | "ACE"; stripeSubscriptionId: string | null; commissionMonthsBeforePortal: number }, subscriptionId: string | null) {
+export function commissionGroup(
+  client: { type: "DIRECT" | "ACE"; stripeSubscriptionId: string | null; commissionMonthsBeforePortal: number },
+  subscriptionId: string | null,
+  /** For another package: its own paid months already earned before the portal. */
+  packageMonthsBefore = 0,
+) {
   const isMain = !subscriptionId || !client.stripeSubscriptionId || subscriptionId === client.stripeSubscriptionId;
   if (isMain) {
     return {
@@ -51,7 +56,7 @@ export function commissionGroup(client: { type: "DIRECT" | "ACE"; stripeSubscrip
         : {}) as Prisma.InvoiceWhereInput,
     };
   }
-  return { isMain, windowMonths: 12, monthsBefore: 0, invoiceWhere: { stripeSubscriptionId: subscriptionId } as Prisma.InvoiceWhereInput };
+  return { isMain, windowMonths: 12, monthsBefore: packageMonthsBefore, invoiceWhere: { stripeSubscriptionId: subscriptionId } as Prisma.InvoiceWhereInput };
 }
 
 const isEarlier = (a: Invoice, b: Invoice) =>
@@ -82,7 +87,10 @@ export async function recordPaymentCommission(invoiceRowId: string): Promise<num
     if (split.length === 0) return 0;
 
     // Each package (Stripe subscription) has its own commission window (owner, 2026-11-22).
-    const group = commissionGroup(client, inv.stripeSubscriptionId);
+    const pkgRow = inv.stripeSubscriptionId && inv.stripeSubscriptionId !== client.stripeSubscriptionId
+      ? await tx.clientSubscription.findUnique({ where: { stripeSubscriptionId: inv.stripeSubscriptionId }, select: { commissionMonthsBeforePortal: true } })
+      : null;
+    const group = commissionGroup(client, inv.stripeSubscriptionId, pkgRow?.commissionMonthsBeforePortal ?? 0);
     const windowMonths = group.windowMonths;
     const groupInvoiceIds = (await tx.invoice.findMany({ where: { clientId, ...group.invoiceWhere }, select: { id: true } })).map((i) => i.id);
     // Hard cap: months earned before the portal + invoices that have already earned.

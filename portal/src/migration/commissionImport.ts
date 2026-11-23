@@ -93,6 +93,8 @@ export type ReadyRow = {
   aceLumpSum: boolean;
   /** Payments before this moment count as settled outside the portal and never earn. */
   settledThrough: Date | null;
+  /** An additional package (not the client's main one), by its Stripe subscription: only its months are set. */
+  packageSubscriptionId?: string;
 };
 export type Problem = { line: number; client: string; error: string };
 
@@ -116,6 +118,7 @@ export async function planImport(
   const settledThrough = opts.settledThrough ? startOfDayIn(opts.settledThrough, TZ) : null;
   const rows = parseCsv(text);
   const packages = await db.package.findMany();
+  const subRows = await db.clientSubscription.findMany({ select: { stripeSubscriptionId: true, clientId: true } });
   const [clients, execs, batches, freeSlots, paidInvoices, earnedInvoices] = await Promise.all([
     db.client.findMany({ include: { package: true } }),
     db.executive.findMany(),
@@ -138,7 +141,28 @@ export async function planImport(
     const fail = (error: string) => problems.push({ line, client: key, error });
     if (!key) return fail("The client column is empty.");
 
-    const matches = key.startsWith("cus_")
+    // A Stripe subscription (sub_…): the client's main package, or one of their additional packages.
+    if (key.startsWith("sub_")) {
+      const sr = subRows.find((s) => s.stripeSubscriptionId === key);
+      const owner = clients.find((c) => c.stripeSubscriptionId === key) ?? (sr ? clients.find((c) => c.id === sr.clientId) : undefined);
+      if (!owner) return fail(`No client has the Stripe subscription "${key}".`);
+      if (owner.stripeSubscriptionId !== key) {
+        const others = (["type", "executive_1", "rate_1", "executive_2", "rate_2", "ace_batch", "ace_start_date", "effective_from"] as const).filter((k) => r[k]);
+        if (others.length) return fail(`For an additional package (${key}) only months_already_earned can be set; remove: ${others.join(", ")}.`);
+        const m = Number(r.months_already_earned);
+        if (r.months_already_earned === undefined || !Number.isInteger(m) || m < 0 || m > 12) return fail("Give months_already_earned for this package: a whole number from 0 to 12.");
+        if (seenClients.has(key)) return fail(`This package appears more than once in the file (also line ${seenClients.get(key)}).`);
+        seenClients.set(key, line);
+        ready.push({
+          line, willPost: [], aceLumpSum: false, settledThrough, clientId: owner.id, clientName: `${owner.name} (additional package)`, type: null,
+          shares: [], newExecutives: [], monthsBeforePortal: m, effectiveFrom: startOfDayIn("2000-01-01", TZ), ace: null, packageSubscriptionId: key,
+        });
+        return;
+      }
+    }
+    const matches = key.startsWith("sub_")
+      ? clients.filter((c) => c.stripeSubscriptionId === key)
+      : key.startsWith("cus_")
       ? clients.filter((c) => c.stripeCustomerId === key)
       : key.includes("@")
         ? clients.filter((c) => c.email?.toLowerCase() === key.toLowerCase())
@@ -267,6 +291,17 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
   let applied = 0;
   for (let r of rows) {
     const fail = (error: string) => failed.push({ line: r.line, client: r.clientName, error });
+    if (r.packageSubscriptionId) {
+      // An additional package: only its months already earned (each package has its own window).
+      const row = await db.clientSubscription.findUnique({ where: { stripeSubscriptionId: r.packageSubscriptionId } });
+      if (!row) { fail("That package is no longer in the portal."); continue; }
+      if (row.commissionMonthsBeforePortal !== r.monthsBeforePortal) {
+        await db.clientSubscription.update({ where: { id: row.id }, data: { commissionMonthsBeforePortal: r.monthsBeforePortal } });
+        await writeAudit({ actorId: actor.id, action: "package_commission_months_set", entity: "Client", entityId: row.clientId, before: { subscriptionId: row.stripeSubscriptionId, months: row.commissionMonthsBeforePortal }, after: { subscriptionId: row.stripeSubscriptionId, months: r.monthsBeforePortal, via: "import" } });
+      }
+      applied++;
+      continue;
+    }
     for (const name of r.newExecutives) {
       if (!(await db.executive.findFirst({ where: { name: { equals: name, mode: "insensitive" } } }))) {
         const e = await db.executive.create({ data: { name } });

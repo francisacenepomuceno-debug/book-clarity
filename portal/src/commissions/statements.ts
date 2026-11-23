@@ -115,8 +115,9 @@ export async function commissionProgress(clientId: string) {
   const subs = await subscriptionsOf(client);
   const pkgs = await db.package.findMany({ where: { id: { in: subs.flatMap((s) => (s.packageId ? [s.packageId] : [])) } } });
   const pkgName = new Map(pkgs.map((p) => [p.id, p.name]));
+  const monthsBeforeOf = new Map(subs.map((s) => [s.subscriptionId, s.monthsBeforePortal]));
   const progressFor = (subscriptionId: string | null) => {
-    const g = commissionGroup(client, subscriptionId);
+    const g = commissionGroup(client, subscriptionId, (subscriptionId && monthsBeforeOf.get(subscriptionId)) || 0);
     const mine = paid.filter((p) => (g.isMain ? !client.stripeSubscriptionId || !p.stripeSubscriptionId || p.stripeSubscriptionId === client.stripeSubscriptionId : p.stripeSubscriptionId === subscriptionId));
     const earnedMonths = Math.min(g.windowMonths, g.monthsBefore + mine.filter((p) => packagePaidCents(p) > 0).length);
     return { windowMonths: g.windowMonths, earnedMonths, remainingMonths: g.windowMonths - earnedMonths };
@@ -124,7 +125,7 @@ export async function commissionProgress(clientId: string) {
   const main = progressFor(client.stripeSubscriptionId);
   const otherPackages = subs
     .filter((s) => !s.isMain)
-    .map((s) => ({ subscriptionId: s.subscriptionId, packageName: (s.packageId && pkgName.get(s.packageId)) || s.productName || "Other package", ended: !!s.endedAt, ...progressFor(s.subscriptionId) }));
+    .map((s) => ({ subscriptionId: s.subscriptionId, packageName: (s.packageId && pkgName.get(s.packageId)) || s.productName || "Other package", ended: !!s.endedAt, monthsBeforePortal: s.monthsBeforePortal, ...progressFor(s.subscriptionId) }));
   const shares = await db.commissionShare.findMany({ where: { clientId } });
   const execs = await db.executive.findMany({ where: { id: { in: shares.map((s) => s.executiveId) } } });
   const name = new Map(execs.map((e) => [e.id, e.name]));

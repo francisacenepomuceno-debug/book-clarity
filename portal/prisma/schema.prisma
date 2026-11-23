@@ -113,17 +113,20 @@ model PriceChangeMove {
 /// One Stripe subscription of a client. A client can pay for several packages, each billed on its own schedule.
 /// Client.stripeSubscriptionId is the client's main subscription (their bookkeeping package).
 model ClientSubscription {
-  id                   String    @id @default(cuid())
-  clientId             String
-  client               Client    @relation(fields: [clientId], references: [id])
-  stripeSubscriptionId String    @unique
-  packageId            String?
-  package              Package?  @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  id                           String    @id @default(cuid())
+  clientId                     String
+  client                       Client    @relation(fields: [clientId], references: [id])
+  stripeSubscriptionId         String    @unique
+  packageId                    String?
+  package                      Package?  @relation(fields: [packageId], references: [id], onDelete: SetNull)
   /// What Stripe calls it (product names), shown when the subscription isn't linked to a portal package.
-  productName          String?
-  status               String?
-  endedAt              DateTime?
-  createdAt            DateTime  @default(now())
+  productName                  String?
+  /// Paid months of this package that already earned commission before the portal (the main package uses the
+  /// client's own setting).
+  commissionMonthsBeforePortal Int       @default(0)
+  status                       String?
+  endedAt                      DateTime?
+  createdAt                    DateTime  @default(now())
 
   @@index([clientId])
 }
