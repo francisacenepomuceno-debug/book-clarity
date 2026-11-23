@@ -71,7 +71,7 @@ describe("applying an import", () => {
     const run = async () => applyImport((await planImport(csv, { createMissingExecutives: false })).ready);
     expect(await run()).toMatchObject({ applied: 1, failed: [] });
     await run();
-    const c = await db.client.findUniqueOrThrow({ where: { stripeCustomerId: "cus_acme" } });
+    const c = await db.client.findFirstOrThrow({ where: { stripeCustomerId: "cus_acme" } });
     expect(c).toMatchObject({ type: "DIRECT", commissionMonthsBeforePortal: 4 });
     const shares = await db.commissionShare.findMany({ where: { clientId: c.id } });
     expect(shares.map((s) => s.rateBp).sort()).toEqual([500, 500]);
@@ -87,7 +87,7 @@ describe("applying an import", () => {
     expect(plan.ready.map((r) => r.clientName)).toEqual(["Beta Co"]);
     expect(plan.problems[0].error).toMatch(/no free Growth slot/i);
     expect(await applyImport(plan.ready)).toMatchObject({ applied: 1, failed: [] });
-    const beta = await db.client.findUniqueOrThrow({ where: { stripeCustomerId: "cus_beta" } });
+    const beta = await db.client.findFirstOrThrow({ where: { stripeCustomerId: "cus_beta" } });
     expect(beta.type).toBe("ACE");
     expect(beta.aceSlotId).not.toBeNull();
     expect(await db.commissionEntry.count({ where: { kind: "ACE_PREPAID" } })).toBe(0); // historical

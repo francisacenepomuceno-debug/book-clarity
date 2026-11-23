@@ -16,6 +16,7 @@ import { DiscountForm } from "./DiscountForm";
 import { subscriptionRef, subscriptionsOf } from "@/clients/subscriptions";
 import { LinkPackageForm, MakeMainButton, RevertPriceButton } from "./PriceSection";
 import { PaysOutsideForm } from "@/app/payments/outside/Forms";
+import { RenameCompanyForm, SeparateCompanyForm } from "./CompanySection";
 import { OUTSIDE_METHODS } from "@/billing/outsidePayments";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +41,9 @@ export default async function ClientPage({ params }: { params: Promise<{ subscri
   const linked = ref?.package ?? null;
   const otherSubs = client ? (await subscriptionsOf(client)).filter((s) => s.subscriptionId !== subscriptionId && !s.endedAt) : [];
   const otherNames = new Map((await db.package.findMany({ where: { id: { in: otherSubs.flatMap((s) => (s.packageId ? [s.packageId] : [])) } } })).map((p) => [p.id, p.name]));
+  const sameAccount = client?.stripeCustomerId
+    ? await db.client.findMany({ where: { stripeCustomerId: client.stripeCustomerId, id: { not: client.id } }, orderBy: { name: "asc" } })
+    : [];
   const discounts = money && client ? await db.discount.findMany({ where: { clientId: client.id }, orderBy: { createdAt: "desc" }, take: 5 }) : [];
 
   return (
@@ -79,6 +83,19 @@ export default async function ClientPage({ params }: { params: Promise<{ subscri
               <div className="kpi"><div className="label">Paying by</div><div className="value small">{r.paymentMethod}</div></div>
               <div className="kpi"><div className="label">Amount due</div><div className="value">{r.amountDueCents ? formatUsd(r.amountDueCents) : "—"}</div></div>
             </section>
+
+            {canLink && client && (
+              <section className="panel pad" id="company">
+                <h3>Company</h3>
+                {sameAccount.length > 0 && (
+                  <p className="muted">
+                    Shares a Stripe account with: {sameAccount.map((c, i) => <span key={c.id}>{i > 0 && ", "}<a href={`/clients/${c.stripeSubscriptionId ?? c.id}`}>{c.name}</a></span>)}. Each company has its own packages and commission.
+                  </p>
+                )}
+                <RenameCompanyForm clientId={client.id} subscriptionId={subscriptionId} name={client.name} />
+                {otherSubs.length > 0 && <SeparateCompanyForm subscriptionId={subscriptionId} packageLabel={r.packageName} />}
+              </section>
+            )}
 
             {canLink && client && (
               <section className="panel pad" id="price">

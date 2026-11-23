@@ -60,7 +60,7 @@ export async function syncClientsFromSnapshot(rows: LiveClientRow[]): Promise<vo
   for (const r of byCustomer.values()) {
     // Create missing clients only. Status, subscription link and Stripe status belong to the webhooks;
     // only contact details are refreshed here.
-    const existing = await db.client.findUnique({ where: { stripeCustomerId: r.customerId } });
+    const existing = await db.client.findFirst({ where: { stripeCustomerId: r.customerId }, orderBy: { createdAt: "asc" } });
     if (!existing) {
       await db.client.create({
         data: {
@@ -78,11 +78,13 @@ export async function syncClientsFromSnapshot(rows: LiveClientRow[]): Promise<vo
     }
     const phone = r.phone ?? existing.phone;
     const contactChanged = r.email !== existing.email || phone !== existing.phone;
+    // When several companies share this Stripe customer, each keeps its own company name.
+    const shared = (await db.client.count({ where: { stripeCustomerId: r.customerId } })) > 1;
     await db.client.update({
       where: { id: existing.id },
       // A changed email/phone means the cached GHL contact may be the wrong person: look it up again next time.
       data: {
-        name: r.name,
+        ...(shared ? {} : { name: r.name }),
         email: r.email,
         phone,
         ...(contactChanged ? { ghlContactId: null } : {}),
@@ -128,8 +130,15 @@ export async function withClientTypes(rows: LiveClientRow[]): Promise<LiveClient
 export async function withPricing(rows: LiveClientRow[]): Promise<LiveClientRow[]> {
   const ids = rows.map((r) => r.subscriptionId);
   // A subscription's own package if set; for a client's main subscription, the client's package.
-  const subRows = await db.clientSubscription.findMany({ where: { stripeSubscriptionId: { in: ids } }, select: { stripeSubscriptionId: true, packageId: true } });
+  const subRows = await db.clientSubscription.findMany({ where: { stripeSubscriptionId: { in: ids } }, select: { stripeSubscriptionId: true, packageId: true, client: { select: { name: true, stripeCustomerId: true } } } });
   const mains = await db.client.findMany({ where: { stripeSubscriptionId: { in: ids } }, select: { stripeSubscriptionId: true, packageId: true } });
+  // Companies sharing a Stripe customer are shown under their own name (Stripe has one name per customer).
+  const sharedCustomers = new Set(
+    (await db.client.groupBy({ by: ["stripeCustomerId"], where: { stripeCustomerId: { in: rows.map((r) => r.customerId) } }, _count: { _all: true } }))
+      .filter((g) => g._count._all > 1)
+      .map((g) => g.stripeCustomerId),
+  );
+  const nameOf = new Map(subRows.filter((s) => sharedCustomers.has(s.client.stripeCustomerId)).map((s) => [s.stripeSubscriptionId, s.client.name]));
   const pkgIdOf = new Map<string, string | null>();
   for (const m of mains) pkgIdOf.set(m.stripeSubscriptionId!, m.packageId);
   for (const s of subRows) if (s.packageId || !pkgIdOf.has(s.stripeSubscriptionId)) pkgIdOf.set(s.stripeSubscriptionId, s.packageId);
@@ -140,7 +149,7 @@ export async function withPricing(rows: LiveClientRow[]): Promise<LiveClientRow[
     const p = id ? pkgById.get(id) ?? null : null;
     const listPriceCents = p && !p.isCustom ? p.monthlyPriceCents : null;
     const packageName = p && (r.packageName === "—" || r.packageName.startsWith("Other:")) ? p.name : r.packageName;
-    return { ...r, packageName, listPriceCents, discounted: discountState(r, listPriceCents).discounted };
+    return { ...r, name: nameOf.get(r.subscriptionId) ?? r.name, packageName, listPriceCents, discounted: discountState(r, listPriceCents).discounted };
   });
 }
 

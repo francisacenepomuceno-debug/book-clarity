@@ -100,9 +100,9 @@ describe("#5 history includes clients who left, and start dates come from Stripe
       customers: { retrieve: vi.fn(async (id: string) => ({ id, name: id === "cus_gone" ? "Gone LLC" : id, email: null })) },
     } as unknown as Stripe;
     expect(await backfillInvoices(stripe, d("2025-01-01"))).toMatchObject({ stored: 2, clientsAdded: 1 });
-    const gone = await db.client.findUniqueOrThrow({ where: { stripeCustomerId: "cus_gone" } });
+    const gone = await db.client.findFirstOrThrow({ where: { stripeCustomerId: "cus_gone" } });
     expect(gone).toMatchObject({ name: "Gone LLC", status: "ENDED", endedAt: d("2025-08-01T12:00:00Z"), startedAt: d("2024-06-01T12:00:00Z") });
-    expect((await db.client.findUniqueOrThrow({ where: { stripeCustomerId: "cus_1" } })).startedAt).toEqual(d("2023-03-15T12:00:00Z"));
+    expect((await db.client.findFirstOrThrow({ where: { stripeCustomerId: "cus_1" } })).startedAt).toEqual(d("2023-03-15T12:00:00Z"));
     expect(await db.client.count({ where: { stripeCustomerId: { in: ["cus_ace", "cus_oneoff"] } } })).toBe(0);
     // Existing clients are not "new" in the first loaded month.
     expect((await newClients(parsePeriod("month", "2025-02", TZ))).total).toBe(0);

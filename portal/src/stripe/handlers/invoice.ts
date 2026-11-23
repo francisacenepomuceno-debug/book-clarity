@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
 import type { Invoice, InvoiceKind } from "@prisma/client";
 import { db } from "@/lib/db";
+import { clientForStripe } from "@/clients/subscriptions";
 import { idOf, isCardFeeLine, isOnboardingLine, subscriptionIdOf } from "@/stripe/lines";
 
 const fromTs = (t: number | null | undefined) => (t ? new Date(t * 1000) : null);
@@ -32,7 +33,8 @@ export async function upsertInvoiceFromStripe(
   inv: Stripe.Invoice,
   extra: { failedNow?: boolean; paid?: PaidMethod | null; backfilled?: boolean } = {},
 ): Promise<Invoice | null> {
-  const client = await db.client.findUnique({ where: { stripeCustomerId: idOf(inv.customer as string) ?? "" } });
+  // Several companies can share a Stripe customer: the invoice's subscription decides which one it bills.
+  const client = await clientForStripe(idOf(inv.customer as string), subscriptionIdOf(inv));
   if (!client) {
     console.info(`[stripe] invoice ${inv.id}: customer not linked to a client yet, skipped`);
     return null;

@@ -1,7 +1,7 @@
 import type { Client, Onboarding, Package } from "@prisma/client";
 import { db } from "@/lib/db";
 import { nextStep, type OnboardingStep } from "@/domain/onboarding";
-import { renderContract, sha256, waivedFeeTemplate } from "@/domain/contract";
+import { aceTemplate, renderContract, sha256, waivedFeeTemplate } from "@/domain/contract";
 import { contractFor } from "@/packages/contracts";
 import { onboardingIdFromToken } from "@/onboarding/start";
 import { checkIntake, getCountersigner, getOnboardingSettings, parseIntakeQuestions } from "@/settings/onboarding";
@@ -89,8 +89,14 @@ export async function contractPreview(l: Loaded, now: Date = new Date()) {
   const found = await contractFor(l.pkg);
   if (!found) return null;
   const waived = (l.onboarding.onboardingFeeCents ?? l.pkg.onboardingFeeCents) === 0;
-  // The version stays the package contract's; only the fee sentences differ for a waived fee.
-  const c = waived ? { ...found, template: waivedFeeTemplate(found.template) } : found;
+  // The version stays the package contract's; only the fee and billing sentences differ:
+  // ACE clients are prepaid for 6 months and charged nothing at signup; a waived fee bills the first month at signup.
+  const c =
+    l.client.type === "ACE"
+      ? { ...found, template: aceTemplate(found.template) }
+      : waived
+        ? { ...found, template: waivedFeeTemplate(found.template) }
+        : found;
   const d = (l.onboarding.details ?? {}) as Partial<Details>;
   const values = {
     date: fmtDay(now),

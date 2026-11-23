@@ -57,7 +57,7 @@ describe("#2 a row is checked fully before anything is written", () => {
       expect.stringMatching(/real date/i),
       expect.stringMatching(/real date/i),
     ]);
-    expect((await db.client.findUniqueOrThrow({ where: { stripeCustomerId: "cus_b" } })).type).toBe("DIRECT");
+    expect((await db.client.findFirstOrThrow({ where: { stripeCustomerId: "cus_b" } })).type).toBe("DIRECT");
   });
 
   it("the same client twice in one file is a problem, not a silent overwrite", async () => {

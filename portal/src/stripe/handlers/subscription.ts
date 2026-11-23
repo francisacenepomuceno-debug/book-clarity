@@ -2,7 +2,7 @@ import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { idOf } from "@/stripe/lines";
 import { refreshClientStatus } from "@/stripe/clientStatusSync";
-import { ensureClientSubscription } from "@/clients/subscriptions";
+import { clientForStripe, ensureClientSubscription } from "@/clients/subscriptions";
 
 /**
  * A client can have several subscriptions (one per package, each on its own billing day). Every one is recorded;
@@ -10,7 +10,7 @@ import { ensureClientSubscription } from "@/clients/subscriptions";
  * that other one becomes the main subscription and the client stays active. The client ends only when all have.
  */
 export async function onSubscriptionChanged(sub: Stripe.Subscription, deleted: boolean): Promise<void> {
-  const client = await db.client.findUnique({ where: { stripeCustomerId: idOf(sub.customer as string) ?? "" } });
+  const client = await clientForStripe(idOf(sub.customer as string), sub.id);
   if (!client) return;
   const ended = deleted || sub.status === "canceled" || sub.status === "incomplete_expired";
   const endedAt = ended ? new Date((sub.ended_at ?? Math.floor(Date.now() / 1000)) * 1000) : null;

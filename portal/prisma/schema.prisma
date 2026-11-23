@@ -141,7 +141,8 @@ model Client {
   status                       ClientStatus         @default(ONBOARDING)
   packageId                    String?
   package                      Package?             @relation(fields: [packageId], references: [id])
-  stripeCustomerId             String?              @unique
+  /// Several clients (companies) can share one Stripe customer, each with its own subscriptions.
+  stripeCustomerId             String?
   stripeSubscriptionId         String?              @unique
   ghlContactId                 String?
   defaultPaymentFunding        String?
@@ -170,6 +171,8 @@ model Client {
   invoices                     Invoice[]
   subscriptions                ClientSubscription[]
   discounts                    Discount[]
+
+  @@index([stripeCustomerId])
 }
 
 model Invoice {

@@ -57,7 +57,7 @@ describe("syncClientsFromSnapshot", () => {
 
   it("keeps Direct/ACE and other portal-owned fields untouched", async () => {
     await syncClientsFromSnapshot([row()]);
-    await db.client.update({ where: { stripeCustomerId: "cus_1" }, data: { type: "ACE" } });
+    await db.client.updateMany({ where: { stripeCustomerId: "cus_1" }, data: { type: "ACE" } });
     await syncClientsFromSnapshot([row()]);
     expect((await db.client.findFirstOrThrow()).type).toBe("ACE");
   });

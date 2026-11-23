@@ -106,9 +106,9 @@ describe("#5 phone numbers and stale GHL contacts", () => {
   it("syncs the phone from Stripe and forgets the cached GHL contact when contact details change", async () => {
     const row = { customerId: "cus_1", subscriptionId: "sub_1", name: "Acme", email: "a@x.co", phone: "+15551112222", status: "CURRENT", packageName: "G", sixMonthContract: false, packageMonthlyCents: 1, cardFeeMonthlyCents: 0, hasDiscount: false, autopay: true, paymentMethod: "ACH", nextChargeDate: null, amountDueCents: 0, pastDueSince: null } as const;
     await syncClientsFromSnapshot([row as never]);
-    await db.client.update({ where: { stripeCustomerId: "cus_1" }, data: { ghlContactId: "ct_old" } });
+    await db.client.updateMany({ where: { stripeCustomerId: "cus_1" }, data: { ghlContactId: "ct_old" } });
     await syncClientsFromSnapshot([{ ...row, email: "new@x.co" } as never]);
-    expect(await db.client.findUniqueOrThrow({ where: { stripeCustomerId: "cus_1" } })).toMatchObject({ phone: "+15551112222", email: "new@x.co", ghlContactId: null });
+    expect(await db.client.findFirstOrThrow({ where: { stripeCustomerId: "cus_1" } })).toMatchObject({ phone: "+15551112222", email: "new@x.co", ghlContactId: null });
   });
 });
 
