@@ -69,6 +69,22 @@ describe("several companies sharing one Stripe customer", () => {
     expect((await commissionProgress(ivan)).otherPackages.map((o) => o.subscriptionId)).toEqual([ARAP]);
   });
 
+  it("separating the client's main package works: another package becomes the first company's main one", async () => {
+    await db.client.update({ where: { id: ivan }, data: { commissionMonthsBeforePortal: 3 } });
+    await db.clientSubscription.update({ where: { stripeSubscriptionId: MM }, data: { commissionMonthsBeforePortal: 4 } });
+    await paid(HP);
+    const r = await separateCompany(HP, "Hispanic Plug");
+    expect(r.ok).toBe(true);
+    const hp = await db.client.findFirstOrThrow({ where: { name: "Hispanic Plug" } });
+    // The moved main package keeps its months (3) and package; the old client's new main is the next package, with its own months (4).
+    expect(hp).toMatchObject({ stripeSubscriptionId: HP, packageId: ess, commissionMonthsBeforePortal: 3 });
+    expect(await db.invoice.count({ where: { clientId: hp.id } })).toBe(1);
+    const old = await db.client.findUniqueOrThrow({ where: { id: ivan } });
+    expect([MM, ARAP]).toContain(old.stripeSubscriptionId);
+    expect(old.commissionMonthsBeforePortal).toBe(old.stripeSubscriptionId === MM ? 4 : 0);
+    expect((await db.clientSubscription.findUniqueOrThrow({ where: { stripeSubscriptionId: old.stripeSubscriptionId! } })).commissionMonthsBeforePortal).toBe(0);
+  });
+
   it("names: each company keeps its own name; the dashboard shows it instead of Stripe's customer name", async () => {
     await separateCompany(MM, "Mundo Media");
     expect(await renameClient(ivan, "Hispanic Plug")).toEqual({ ok: true });
