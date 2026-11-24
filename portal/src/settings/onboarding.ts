@@ -10,8 +10,10 @@ export type OnboardingSettings = {
   intakeQuestions: string;
   /** User id of the person who countersigns contracts (Jose). Empty = the first Owner. */
   countersignerUserId: string;
-  /** GHL booking link for the onboarding call (until calendar sync, Plan 4C). */
+  /** GHL booking link for the onboarding call. */
   calendarUrl: string;
+  /** The GHL calendar's ID: the portal checks it for each new client's booked call. Empty = no sync. */
+  ghlCalendarId: string;
   /** Days unpaid after the first failed charge before a client is suspended. */
   suspendAfterDays: number;
   /** Office copy of every fully signed agreement (empty = none). */
@@ -22,6 +24,7 @@ export const DEFAULT_ONBOARDING_SETTINGS: OnboardingSettings = {
   intakeQuestions: DEFAULT_INTAKE_QUESTIONS,
   countersignerUserId: "",
   calendarUrl: "",
+  ghlCalendarId: "",
   suspendAfterDays: 30,
   contractCopyEmail: "info@book-clarity.com",
 };
@@ -42,7 +45,7 @@ export async function getCountersigner() {
 }
 
 /** Owners: the questionnaire, who countersigns, the onboarding-call booking link, and when unpaid clients are suspended. */
-export async function saveOnboardingSettings(i: Omit<OnboardingSettings, "contractCopyEmail"> & { contractCopyEmail?: string }): Promise<ActionResult> {
+export async function saveOnboardingSettings(i: Omit<OnboardingSettings, "contractCopyEmail" | "ghlCalendarId"> & { contractCopyEmail?: string; ghlCalendarId?: string }): Promise<ActionResult> {
   let actor;
   try {
     actor = await requirePermission("ace.manage");
@@ -56,6 +59,8 @@ export async function saveOnboardingSettings(i: Omit<OnboardingSettings, "contra
   if (badIf) return { ok: false, error: `This line's "if:" doesn't match an earlier question exactly: ${badIf.split("|")[0].trim()}` };
   const calendarUrl = i.calendarUrl.trim();
   if (calendarUrl && !/^https:\/\/\S+$/.test(calendarUrl)) return { ok: false, error: "The booking link must start with https://" };
+  const ghlCalendarId = (i.ghlCalendarId ?? (await getOnboardingSettings()).ghlCalendarId).trim();
+  if (ghlCalendarId && !/^[A-Za-z0-9_-]{8,64}$/.test(ghlCalendarId)) return { ok: false, error: "The GHL calendar ID should be letters and numbers only (GHL → Calendars → the calendar's settings)." };
   if (!Number.isInteger(i.suspendAfterDays) || i.suspendAfterDays < 7 || i.suspendAfterDays > 120) return { ok: false, error: "Suspend after must be between 7 and 120 days." };
   if (i.countersignerUserId) {
     const u = await db.user.findUnique({ where: { id: i.countersignerUserId } });
@@ -63,7 +68,7 @@ export async function saveOnboardingSettings(i: Omit<OnboardingSettings, "contra
   }
   const copy = (i.contractCopyEmail ?? (await getOnboardingSettings()).contractCopyEmail).trim().toLowerCase();
   if (copy && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(copy)) return { ok: false, error: "Enter a valid email for signed-agreement copies, or leave it empty." };
-  const value = { contractCopyEmail: copy, intakeQuestions: i.intakeQuestions.replace(/\r\n/g, "\n").trim(), countersignerUserId: i.countersignerUserId, calendarUrl, suspendAfterDays: i.suspendAfterDays };
+  const value = { contractCopyEmail: copy, intakeQuestions: i.intakeQuestions.replace(/\r\n/g, "\n").trim(), countersignerUserId: i.countersignerUserId, calendarUrl, ghlCalendarId, suspendAfterDays: i.suspendAfterDays };
   const before = await getOnboardingSettings();
   await db.setting.upsert({ where: { key: "onboarding" }, create: { key: "onboarding", value }, update: { value } });
   await writeAudit({ actorId: actor.id, action: "onboarding_settings_saved", entity: "Setting", entityId: "onboarding", before, after: value });

@@ -87,6 +87,7 @@ export async function launchStatus(now: Date = new Date()) {
     { key: "commissionOwners", label: "Every active Direct client has a commission owner", ok: unassigned.length === 0, detail: names(unassigned.map((c) => c.name)) },
     { key: "aceStartDates", label: "Every active ACE client has a start date", ok: aceMissing.length === 0, detail: names(aceMissing) },
     { key: "bookingLink", label: "Onboarding call booking link set (Settings → Onboarding)", ok: !!onboarding.calendarUrl, detail: onboarding.calendarUrl ? "" : "booking link not set" },
+    { key: "calendarSync", label: "GHL calendar ID set, so booked calls show in the portal (Settings → Onboarding)", ok: !!onboarding.ghlCalendarId, detail: onboarding.ghlCalendarId ? "" : "calendar ID not set; clients confirm their booking themselves" },
   ];
   const userName = new Map(users.map((u) => [u.id, u.name]));
   const manual = MANUAL_CHECKS.map((m) => {

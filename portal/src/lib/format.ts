@@ -3,6 +3,9 @@ const TZ = process.env.BUSINESS_TZ ?? "America/New_York";
 export const fmtDate = (d: Date | null | undefined) =>
   d ? d.toLocaleDateString("en-US", { timeZone: TZ, month: "short", day: "numeric", year: "numeric" }) : "—";
 
+export const fmtDateTime = (d: Date | null | undefined) =>
+  d ? d.toLocaleString("en-US", { timeZone: TZ, month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
+
 /** "2026-11" → "November 2026" */
 export const fmtMonth = (m: string) => {
   const [y, mo] = m.split("-").map(Number);

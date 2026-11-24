@@ -431,6 +431,11 @@ model Onboarding {
   intake                Json?
   intakeAt              DateTime?
   callBookedAt          DateTime?
+  /// The onboarding call as booked on Book Clarity's GHL calendar (synced; null until seen in GHL).
+  callStartsAt          DateTime?
+  callEventId           String?
+  /// "booked" or "cancelled", as last seen in GHL.
+  callStatus            String?
   completedAt           DateTime?
   lastProgressAt        DateTime  @default(now())
   createdById           String?

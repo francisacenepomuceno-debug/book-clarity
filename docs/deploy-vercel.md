@@ -60,9 +60,14 @@ Go to **Deployments → Redeploy**, or push to the production branch. When it fi
 Use **Book Clarity's own GHL account** (not any other business's sub-account).
 
 1. In GHL, open the Book Clarity sub-account → **Settings → Private Integrations → Create new integration**.
-2. Give it the scopes **contacts.write**, **contacts.readonly**, **conversations/message.write** and **conversations.readonly**.
+2. Give it the scopes **contacts.write**, **contacts.readonly**, **conversations/message.write**, **conversations.readonly**, **calendars.readonly** and **calendars/events.readonly** (the last two let the portal see onboarding calls booked on your calendar).
 3. Copy the token into Vercel as `GHL_API_TOKEN`, and the sub-account's **Location ID** (Settings → Business Profile) as `GHL_LOCATION_ID`. Redeploy.
 4. Make sure the sub-account can send email (a sending domain) and SMS (a phone number) in GHL.
+5. **Onboarding call calendar:** in GHL, open **Calendars**, then the onboarding-call calendar's settings. Copy:
+   - its **booking link** (Share / Permanent link), and
+   - its **calendar ID** (shown in the calendar's settings or at the end of its edit page address).
+
+   Paste both into the portal under **Settings → Onboarding**. The portal then checks the calendar when a new client reaches the last onboarding step, when they press "I've booked my call", and once a day. It shows the call's date and time on the Onboarding page and the client's page, and flags cancellations. Clients are matched by email, so they should book with the email they onboarded with; if the portal can't find the booking, the client's "I've booked my call" still counts.
 
 Messages appear in each contact's GHL **Conversations**. The schedule lives in the portal: 3 days before a charge; on a decline and days 3, 7 and 14; an Owner alert at day 21; ACE clients 60, 30 and 14 days before their prepaid period ends; ACE batch reminders at 7 and 14 days.
 

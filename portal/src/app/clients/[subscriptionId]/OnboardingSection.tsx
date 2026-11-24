@@ -2,7 +2,7 @@ import type { Role } from "@prisma/client";
 import { can } from "@/auth/permissions";
 import { db } from "@/lib/db";
 import { nextStep, stepLabel } from "@/domain/onboarding";
-import { fmtDate } from "@/lib/format";
+import { fmtDate, fmtDateTime } from "@/lib/format";
 
 /** Onboarding progress, agreement and questionnaire answers for staff. */
 export async function OnboardingSection({ clientId, role }: { clientId: string; role: Role }) {
@@ -14,7 +14,10 @@ export async function OnboardingSection({ clientId, role }: { clientId: string; 
     <section className="panel pad">
       <h3>Onboarding</h3>
       <p>
-        {step === "done" ? <>Done. Call booked {fmtDate(o.callBookedAt)}.</> : <>Current step: {stepLabel(step, o.onboardingFeeCents === 0)}.</>}
+        {step === "done" ? <>Done.</> : <>Current step: {stepLabel(step, o.onboardingFeeCents === 0)}.</>}
+        {o.callStatus === "booked" && o.callStartsAt ? <> · Onboarding call: <strong>{fmtDateTime(o.callStartsAt)}</strong> (GHL calendar)</>
+          : o.callStatus === "cancelled" ? <> · <span className="badge AT_RISK">Onboarding call cancelled</span> needs rebooking</>
+          : o.callBookedAt ? <> · Call booked (confirmed by the client {fmtDate(o.callBookedAt)})</> : null}
         {o.signedAt && <> · Agreement signed {fmtDate(o.signedAt)} by {o.signerName}{o.countersignedAt ? ", countersigned" : ", awaiting countersignature"}{can(role, "ace.manage") && <> (<a href={`/contracts/${o.id}`}>view</a>{o.countersignedAt && <> · <a href={`/contracts/${o.id}/pdf`}>download PDF</a></>})</>}</>}
         {o.feePaidAt && <> · Onboarding fee paid {fmtDate(o.feePaidAt)}</>}
         {o.quickbooks && <> · QuickBooks: {o.quickbooks}</>}

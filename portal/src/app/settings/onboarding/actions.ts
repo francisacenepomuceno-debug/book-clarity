@@ -10,6 +10,7 @@ export async function saveOnboardingSettingsAction(_: SettingsResult, f: FormDat
     intakeQuestions: String(f.get("intakeQuestions") ?? ""),
     countersignerUserId: String(f.get("countersignerUserId") ?? ""),
     calendarUrl: String(f.get("calendarUrl") ?? ""),
+    ghlCalendarId: String(f.get("ghlCalendarId") ?? ""),
     suspendAfterDays: Number(f.get("suspendAfterDays")),
     contractCopyEmail: String(f.get("contractCopyEmail") ?? ""),
   });

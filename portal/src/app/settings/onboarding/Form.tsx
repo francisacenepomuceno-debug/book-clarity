@@ -20,6 +20,9 @@ export function OnboardingSettingsForm(p: { settings: OnboardingSettings; owners
       <label>Onboarding call booking link (GHL calendar)
         <input name="calendarUrl" defaultValue={p.settings.calendarUrl} placeholder="https://…" />
       </label>
+      <label>GHL calendar ID (the portal then sees each new client's booked call, its time, reschedules and cancellations)
+        <input name="ghlCalendarId" defaultValue={p.settings.ghlCalendarId} placeholder="e.g. 9Vg4xxxxxxxxxxxxxxxx" />
+      </label>
       <label>Suspend unpaid clients after (days since the first failed payment)
         <input name="suspendAfterDays" type="number" min={7} max={120} defaultValue={p.settings.suspendAfterDays} />
       </label>

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { contractPreview, intakeQuestions, loadOnboarding, type Details } from "@/onboarding/steps";
 import { renderContract } from "@/domain/contract";
@@ -76,6 +77,10 @@ export default async function OnboardPage({ params }: { params: Promise<{ token:
       </Shell>
     );
   }
+  // The call may already be on Book Clarity's GHL calendar (booked in another tab, or from an earlier visit).
+  const { syncOnboardingCalls } = await import("@/onboarding/callSync");
+  const synced = await syncOnboardingCalls({ onboardingIds: [l.onboarding.id] }).catch(() => null);
+  if (synced?.completed) redirect("/setup-complete?onboarded=1");
   return (
     <Shell step={s} ace={ace} waived={waived}>
       <p>Last step: book your onboarding call.</p>

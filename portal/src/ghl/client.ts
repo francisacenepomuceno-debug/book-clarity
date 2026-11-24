@@ -34,6 +34,34 @@ async function call<T>(path: string, body: unknown, f: typeof fetch): Promise<T>
   return (await res.json()) as T;
 }
 
+async function get<T>(path: string, f: typeof fetch): Promise<T> {
+  const res = await f(`${BASE}${path}`, {
+    headers: { Authorization: `Bearer ${process.env.GHL_API_TOKEN}`, Version: VERSION, Accept: "application/json" },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new GhlError(res.status, `GHL ${path.split("?")[0]} failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+  return (await res.json()) as T;
+}
+
+export type GhlCalendarEvent = {
+  id: string;
+  contactId?: string | null;
+  calendarId?: string | null;
+  startTime: string;
+  appointmentStatus?: string | null;
+  deleted?: boolean | null;
+};
+
+/** Appointments on one of Book Clarity's calendars between two times (needs calendars/events.readonly). */
+export async function ghlCalendarEvents(calendarId: string, from: Date, to: Date, f: typeof fetch = fetch): Promise<GhlCalendarEvent[]> {
+  const q = new URLSearchParams({ locationId: process.env.GHL_LOCATION_ID!, calendarId, startTime: String(from.getTime()), endTime: String(to.getTime()) });
+  const r = await get<{ events?: GhlCalendarEvent[] }>(`/calendars/events?${q}`, f);
+  return r.events ?? [];
+}
+
 /** Creates or updates a contact (matched by email/phone) and returns its id. */
 export async function ghlUpsertContact(
   i: { name?: string | null; email?: string | null; phone?: string | null },
