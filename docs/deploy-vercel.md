@@ -4,12 +4,9 @@ This takes about 20 minutes. You need to be signed in to Vercel (with the GitHub
 
 > **Plan:** Vercel's free Hobby plan is for non-commercial use only, so a business portal needs **Vercel Pro** (about $20/month). The Neon Postgres free tier is enough to start.
 
-## 1. Choose which branch goes live
+## 1. Branch
 
-The portal code is on the branch in pull request #1. Either:
-
-- **merge pull request #1** (recommended), so the default branch has the portal and Vercel deploys from it; or
-- leave it unmerged and, after step 2, set **Settings → Git → Production Branch** to `claude/ecstatic-ramanujan-1kuwjl`.
+The portal is on the repository's default branch, so Vercel deploys it from there. Nothing to do here.
 
 ## 2. Create the Vercel project
 
@@ -29,7 +26,7 @@ In **Settings → Environment Variables**, add the following:
 
 | Name | Value |
 |---|---|
-| `STRIPE_SECRET_KEY` | A new **restricted, read-only** Stripe key: Stripe → Developers → API keys → Create restricted key, with **Read** on Customers, Subscriptions, Invoices, Charges, Payment Methods, Products and Prices. |
+| `STRIPE_SECRET_KEY` | A new **restricted** Stripe key with the permissions listed in **"The Stripe key"** at the end of this guide (Stripe → Developers → API keys → Create restricted key). Don't use the full secret key. |
 | `AUTH_SECRET` | A random value of 64 or more characters. Use your password manager's generator. It signs sign-in sessions; changing it signs everyone out. |
 | `SETUP_TOKEN` | A setup code you make up, of 20 or more characters. It's used once in step 6. |
 | `BUSINESS_TZ` | `America/New_York`, or your time zone. |
@@ -140,17 +137,25 @@ To use your own address, such as `portal.bookclarity.com`:
 2. Add the DNS record Vercel shows at your domain provider.
 3. Update the Stripe webhook URL to the new address.
 
-## What works with the read-only key
+## The Stripe key
 
-| Feature | Read-only key |
-|---|---|
-| Client dashboard | Works |
-| Client pages | Works |
-| Live status updates | Works |
-| Logins and Users | Works |
-| **Discounts** | **Doesn't work** |
-| 3% card-fee automation | Switched off by default, so no write access needed |
+The portal writes to Stripe for discounts, price changes, onboarding payments, ACE invoices, marking outside payments paid and auto-suspend. Create a **restricted key** (Stripe → Developers → API keys → Create restricted key) with exactly these permissions and leave everything else at **None**:
 
-Discounts need Stripe write access. When you're ready to use them, make a restricted key with **Write** on Coupons, Subscriptions and Refunds, plus the Read permissions above, and replace `STRIPE_SECRET_KEY`.
+| Resource | Permission | Used for |
+|---|---|---|
+| Customers | **Write** | Onboarding new clients; saving their payment method |
+| Subscriptions | **Write** | Discounts, revert to list price, package price changes, auto-suspend, ACE continuations |
+| Invoices (includes invoice items) | **Write** | ACE batch invoices, onboarding fees, marking outside payments paid, voiding |
+| Prices | **Write** | Package prices, price changes, discounted prices |
+| Products | Read | Matching packages to Stripe products |
+| Coupons | **Write** | Discounts |
+| Refunds | **Write** | Refunds from client pages |
+| Checkout Sessions | **Write** | Onboarding and ACE card payments |
+| Customer portal | **Write** | "Update payment method" links in reminders |
+| Charges and Payment Intents | Read | Payment status, bank payments clearing |
+| Payment Methods | Read | Card vs. bank, for the card fee |
+| Setup Intents | Read | New clients saving a bank account or card |
+
+If a permission is missing, that one action shows an error in the portal and nothing else is changed.
 
 Before the card fee is switched on, it must be checked end to end with a Stripe test-mode key, and the surcharge rules confirmed.
