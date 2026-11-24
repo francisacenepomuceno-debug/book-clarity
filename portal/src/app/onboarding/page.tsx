@@ -2,7 +2,7 @@ import { requirePermission, can } from "@/auth/permissions";
 import { listOnboardings, type OnboardingRow } from "@/onboarding/overview";
 import { listPackages } from "@/packages/packages";
 import { stepLabel } from "@/domain/onboarding";
-import { fmtDate } from "@/lib/format";
+import { fmtDate, fmtDateTime } from "@/lib/format";
 import { PortalHeader } from "@/app/PortalHeader";
 import { NewClientForm, WaiveFeeButton } from "./Forms";
 import { formatUsd } from "@/lib/money";
@@ -30,7 +30,7 @@ function Table({ rows, showStep, now, owner }: { rows: OnboardingRow[]; showStep
               </td>
             )}
             <td>{fmtDate(r.startedAt)}</td>
-            <td>{r.callBookedAt ? fmtDate(r.callBookedAt) : "Not scheduled"}</td>
+            <td>{r.callStatus === "booked" && r.callStartsAt ? fmtDateTime(r.callStartsAt) : r.callStatus === "cancelled" ? <span className="badge AT_RISK">Cancelled</span> : r.callBookedAt ? `Booked (${fmtDate(r.callBookedAt)})` : "Not scheduled"}</td>
             <td>
               {!r.signedAt ? "Not signed" : r.countersignedAt ? "Fully signed" : owner ? <a href={`/contracts/${r.onboardingId}`}>Awaiting countersign</a> : "Awaiting countersign"}
             </td>

@@ -187,10 +187,19 @@ export async function saveIntake(token: string, answers: Record<string, string>,
   return ok ? { ok: true } : { ok: false, error: "This step isn't available right now. Please reload the page." };
 }
 
-/** Until GHL calendar sync (Plan 4C): the client books on the calendar link and confirms here. */
+/**
+ * The client books on the calendar link and confirms here. When the GHL calendar is connected, the booking is
+ * looked up first (and its time recorded); if GHL can't be reached or doesn't show it yet, the client's word counts.
+ */
 export async function confirmCallBooked(token: string, now: Date = new Date()): Promise<ActionResult> {
   const l = await at(token, "call");
   if ("error" in l) return { ok: false, error: l.error };
+  const { syncOnboardingCalls } = await import("@/onboarding/callSync");
+  const synced = await syncOnboardingCalls({ onboardingIds: [l.onboarding.id], now }).catch((e) => {
+    console.warn("[onboarding] GHL calendar check failed", e);
+    return null;
+  });
+  if (synced?.completed) return { ok: true };
   const ok = await advance(l.onboarding.id, { callBookedAt: null }, { callBookedAt: now, completedAt: now }, now);
   return ok ? { ok: true } : { ok: false, error: "This step isn't available right now. Please reload the page." };
 }

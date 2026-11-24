@@ -1,3 +1,4 @@
+import { syncOnboardingCalls } from "@/onboarding/callSync";
 import { db } from "@/lib/db";
 import { runPaymentReminders } from "@/notify/payments";
 import { runAceBatchReminders, runAceNotices } from "@/notify/ace";
@@ -24,6 +25,8 @@ export async function runDaily(now: Date = new Date()) {
   const payments = await safely("payments", () => runPaymentReminders(now));
   const ace = await safely("ace", () => runAceNotices(now));
   const aceBatches = await safely("aceBatches", () => runAceBatchReminders(now));
+  // Before the onboarding reminders, so a client whose call is on the GHL calendar isn't reminded to book it.
+  const onboardingCalls = await safely("onboardingCalls", () => syncOnboardingCalls({ now }));
   const onboarding = await safely("onboarding", () => runOnboardingReminders(now));
   const priceChanges = await safely("priceChanges", () => runPriceChanges(now));
   const outsidePayments = await safely("outsidePayments", () => runOutsidePaymentReminders(now));
@@ -33,5 +36,5 @@ export async function runDaily(now: Date = new Date()) {
   // because the message may have gone out — surfaced here instead.
   const stuckNotices = await db.notification.count({ where: { status: "PENDING", createdAt: { lt: new Date(now.getTime() - 3600_000) } } });
   if (stuckNotices > 0) console.warn(`[daily] ${stuckNotices} notice(s) stuck mid-send; check the Notification log`);
-  return { invoiceSubscriptions, payments, ace, aceBatches, onboarding, priceChanges, outsidePayments, suspensions, stuckNotices };
+  return { invoiceSubscriptions, onboardingCalls, payments, ace, aceBatches, onboarding, priceChanges, outsidePayments, suspensions, stuckNotices };
 }

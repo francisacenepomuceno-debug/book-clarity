@@ -13,6 +13,8 @@ export type OnboardingRow = {
   startedAt: Date;
   lastProgressAt: Date;
   callBookedAt: Date | null;
+  callStartsAt: Date | null;
+  callStatus: string | null;
   signedAt: Date | null;
   countersignedAt: Date | null;
   link: string;
@@ -39,6 +41,8 @@ export async function listOnboardings(): Promise<OnboardingRow[]> {
     startedAt: o.createdAt,
     lastProgressAt: o.lastProgressAt,
     callBookedAt: o.callBookedAt,
+    callStartsAt: o.callStartsAt,
+    callStatus: o.callStatus,
     signedAt: o.signedAt,
     countersignedAt: o.countersignedAt,
     link: onboardingLink(o.id),
