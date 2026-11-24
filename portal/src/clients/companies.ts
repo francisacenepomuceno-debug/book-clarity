@@ -26,7 +26,24 @@ export async function separateCompany(subscriptionId: string, companyName: strin
   const others = await db.clientSubscription.findMany({ where: { clientId: from.id, stripeSubscriptionId: { not: subscriptionId }, endedAt: null } });
   if (others.length === 0) return { ok: false, error: "This is the client's only package. Rename the client instead of separating it." };
 
+  const wasMain = from.stripeSubscriptionId === subscriptionId;
   const created = await db.$transaction(async (tx) => {
+    // If the moved subscription was the old client's main one, another of theirs becomes main first (a subscription
+    // can be the main one of only one client). The main package's months already earned are kept on the client, so
+    // they go with the moved package, and the new main package's own months become the old client's.
+    if (wasMain) {
+      const next = others[0];
+      await tx.client.update({
+        where: { id: from.id },
+        data: {
+          stripeSubscriptionId: next.stripeSubscriptionId,
+          subscriptionStatus: next.status,
+          commissionMonthsBeforePortal: next.commissionMonthsBeforePortal,
+          ...(next.packageId ? { packageId: next.packageId } : {}),
+        },
+      });
+      await tx.clientSubscription.update({ where: { id: next.id }, data: { commissionMonthsBeforePortal: 0 } });
+    }
     const c = await tx.client.create({
       data: {
         name,
@@ -38,12 +55,12 @@ export async function separateCompany(subscriptionId: string, companyName: strin
         stripeCustomerId: from.stripeCustomerId,
         stripeSubscriptionId: subscriptionId,
         subscriptionStatus: row.status,
-        packageId: row.packageId,
+        packageId: row.packageId ?? (wasMain ? from.packageId : null),
         defaultPaymentFunding: from.defaultPaymentFunding,
         paysOutsideStripe: from.paysOutsideStripe,
         outsidePaymentMethod: from.outsidePaymentMethod,
         // This package's months already earned become the new company's main-package months.
-        commissionMonthsBeforePortal: row.commissionMonthsBeforePortal,
+        commissionMonthsBeforePortal: wasMain ? from.commissionMonthsBeforePortal : row.commissionMonthsBeforePortal,
       },
     });
     await tx.clientSubscription.update({ where: { id: row.id }, data: { clientId: c.id, commissionMonthsBeforePortal: 0 } });
@@ -57,11 +74,6 @@ export async function separateCompany(subscriptionId: string, companyName: strin
     const shares = await tx.commissionShare.findMany({ where: { clientId: from.id } });
     for (const s of shares) {
       await tx.commissionShare.create({ data: { clientId: c.id, executiveId: s.executiveId, rateBp: s.rateBp, effectiveFrom: s.effectiveFrom, createdById: actor.id } });
-    }
-    // If the moved subscription was the old client's main one, another of theirs becomes main.
-    if (from.stripeSubscriptionId === subscriptionId) {
-      const next = others[0];
-      await tx.client.update({ where: { id: from.id }, data: { stripeSubscriptionId: next.stripeSubscriptionId, subscriptionStatus: next.status, ...(next.packageId ? { packageId: next.packageId } : {}) } });
     }
     return { client: c, invoices: ids.length };
   });
