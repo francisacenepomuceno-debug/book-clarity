@@ -96,11 +96,9 @@ The portal sends reminders through GHL, so turn off Stripe's duplicates the same
 Reports read the portal's own copy of your Stripe invoices. New invoices arrive by webhook; this copies the history. It only reads from Stripe and is safe to run again.
 
 1. Open the portal's dashboard once, so your existing clients are synced.
-2. On your computer, in the `portal` folder, with the production `DATABASE_URL` and `STRIPE_SECRET_KEY` set, run:
+2. As the Super Admin, open **Launch** and press **Load invoice history** (default start date 2025-01-01). It takes up to a few minutes and ticks the checklist item when done.
 
-   ```bash
-   npx tsx scripts/backfill-invoices.ts --since 2025-01-01
-   ```
+   (Or, from a computer with the production `DATABASE_URL` and `STRIPE_SECRET_KEY` set, in the `portal` folder: `npx tsx scripts/backfill-invoices.ts --since 2025-01-01`.)
 
 It is designed to be safe on live data:
 - Old unpaid invoices are copied without a "failed on" date, so they never trigger payment reminders or suspension.

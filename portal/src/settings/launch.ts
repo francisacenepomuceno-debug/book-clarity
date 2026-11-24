@@ -16,7 +16,7 @@ export const MANUAL_CHECKS = [
   { key: "customerPortal", label: "Stripe customer portal set up: card and bank account allowed, cancelling turned off" },
   { key: "webhookEvents", label: "Stripe webhook sends every event listed in the deploy guide" },
   { key: "testRun", label: "A test-mode onboarding done end to end, once by card and once by bank (ACH)" },
-  { key: "historyLoaded", label: "Invoice history loaded (backfill script run once)" },
+  { key: "historyLoaded", label: "Invoice history loaded (the \"Load invoice history\" button below)" },
 ] as const;
 export type CheckKey = (typeof MANUAL_CHECKS)[number]["key"];
 
@@ -144,4 +144,26 @@ export async function setCardFee(i: { enabled: boolean; ratePercent: number; exc
   await db.setting.upsert({ where: { key: "cardFee" }, create: { key: "cardFee", value }, update: { value } });
   await writeAudit({ actorId: actor.id, action: "card_fee_settings", entity: "Setting", entityId: "cardFee", before, after: value });
   return { ok: true };
+}
+
+/**
+ * Super Admin: copies past Stripe invoices into the portal (read-only in Stripe; safe to run again), so Reports
+ * have history. Same as scripts/backfill-invoices.ts, without needing a terminal. Ticks the checklist item.
+ */
+export async function loadInvoiceHistory(since: string, deps: { stripe?: import("stripe").default } = {}): Promise<ActionResult<{ summary: string }>> {
+  const actor = await superAdmin();
+  if (!actor) return FORBIDDEN;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(since) || Number.isNaN(new Date(since).getTime())) return { ok: false, error: "Enter the start date as YYYY-MM-DD." };
+  const { backfillInvoices } = await import("@/stripe/backfill");
+  const { fillInvoiceSubscriptions } = await import("@/clients/invoiceSubscriptions");
+  const stripe = deps.stripe ?? (await import("@/stripe/client")).getStripe();
+  const r = await backfillInvoices(stripe, new Date(since));
+  // Clients with several packages: record which subscription each copied invoice billed.
+  await fillInvoiceSubscriptions(2000, stripe);
+  const summary = `${r.stored} invoices copied since ${since} (${r.seen} seen; ${r.skipped} skipped: ACE, one-off or not a client yet); ${r.clientsAdded} former clients added.`;
+  const v = await read();
+  v.checks.historyLoaded = { done: true, by: actor.id, byName: actor.name, at: new Date().toISOString() };
+  await write(v);
+  await writeAudit({ actorId: actor.id, action: "invoice_history_loaded", entity: "Setting", entityId: KEY, after: { since, ...r } });
+  return { ok: true, summary };
 }
