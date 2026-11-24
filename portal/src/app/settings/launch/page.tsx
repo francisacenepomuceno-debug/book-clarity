@@ -2,9 +2,11 @@ import { requirePermission } from "@/auth/permissions";
 import { launchStatus } from "@/settings/launch";
 import { fmtDate } from "@/lib/format";
 import { PortalHeader } from "@/app/PortalHeader";
-import { CardFeeForm, CheckToggle, NoticesSwitch } from "./Forms";
+import { CardFeeForm, CheckToggle, HistoryForm, NoticesSwitch } from "./Forms";
 
 export const dynamic = "force-dynamic";
+// Loading invoice history can take a few minutes on Vercel.
+export const maxDuration = 300;
 
 export default async function LaunchPage() {
   const viewer = await requirePermission("settings.manage");
@@ -31,6 +33,12 @@ export default async function LaunchPage() {
             <CardFeeForm enabled={s.cardFee.enabled} ratePercent={s.cardFee.rateBasisPoints / 100} states={s.cardFee.excludedStates.join(", ")} />
           </section>
         </div>
+
+        <section className="panel pad">
+          <h3>Invoice history</h3>
+          <p className="muted">Copies your past Stripe invoices into the portal so Reports and "collected" totals have history. It only reads from Stripe, never changes it, and is safe to run again. Copied invoices never trigger reminders or suspension, and never earn commission (months already paid are set by the commission import).</p>
+          <HistoryForm />
+        </section>
 
         <section className="panel pad">
           <h3>Checked automatically ({autoDone} of {s.automatic.length})</h3>

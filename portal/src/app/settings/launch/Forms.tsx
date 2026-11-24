@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { cardFeeAction, checkAction, noticesAction, type LaunchResult } from "./actions";
+import { cardFeeAction, checkAction, historyAction, noticesAction, type HistoryResult, type LaunchResult } from "./actions";
 
 const Msg = ({ s }: { s: LaunchResult }) => (s.error ? <p className="form-error">{s.error}</p> : null);
 
@@ -38,6 +38,18 @@ export function CardFeeForm(p: { enabled: boolean; ratePercent: number; states: 
       <button name="enabled" value={p.enabled ? "0" : "1"} disabled={pending}>{p.enabled ? "Turn card fee off" : "Turn card fee on"}</button>
       <Msg s={s} />
       {s.ok && <p className="form-ok">Saved.</p>}
+    </form>
+  );
+}
+
+export function HistoryForm() {
+  const [s, action, pending] = useActionState<HistoryResult, FormData>(historyAction, {});
+  return (
+    <form action={action} className="inline-form">
+      <label>Copy invoices from<input name="since" type="date" defaultValue="2025-01-01" required /></label>
+      <button disabled={pending}>{pending ? "Loading… (up to a few minutes)" : "Load invoice history"}</button>
+      {s.error && <p className="form-error">{s.error}</p>}
+      {s.ok && <p className="form-ok">{s.summary}</p>}
     </form>
   );
 }

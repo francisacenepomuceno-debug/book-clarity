@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { setCardFee, setManualCheck, setNoticesOn, type CheckKey } from "@/settings/launch";
+import { loadInvoiceHistory, setCardFee, setManualCheck, setNoticesOn, type CheckKey } from "@/settings/launch";
 
 export type LaunchResult = { ok?: boolean; error?: string };
 const done = (r: { ok: boolean; error?: string }): LaunchResult => {
@@ -23,4 +23,11 @@ export async function cardFeeAction(_: LaunchResult, f: FormData): Promise<Launc
       excludedStates: String(f.get("states") ?? "").split(/[\s,]+/).filter(Boolean),
     }),
   );
+}
+
+export type HistoryResult = { ok?: boolean; error?: string; summary?: string };
+export async function historyAction(_: HistoryResult, f: FormData): Promise<HistoryResult> {
+  const r = await loadInvoiceHistory(String(f.get("since") ?? ""));
+  revalidatePath("/settings/launch");
+  return r.ok ? { ok: true, summary: r.summary } : { error: r.error };
 }
