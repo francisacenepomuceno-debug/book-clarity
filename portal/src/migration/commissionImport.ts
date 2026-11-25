@@ -1,3 +1,4 @@
+import { recomputeClient } from "@/commissions/engine";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/auth/permissions";
 import { monthOf, packagePaidCents, startOfDayIn, validateSplit, windowMonthsFor } from "@/domain/commission";
@@ -124,7 +125,9 @@ export async function planImport(
     db.executive.findMany(),
     db.aceBatch.findMany(),
     db.aceSlot.findMany({ where: { clientId: null }, select: { batchId: true, packageId: true } }),
-    db.invoice.findMany({ where: { kind: "SUBSCRIPTION", status: "paid", paidAt: { not: null }, backfilled: false }, orderBy: { paidAt: "asc" } }),
+    // With a "settled through" date, it decides what is history (even for invoices copied by the history load);
+    // without one, invoices copied by the history load are history.
+    db.invoice.findMany({ where: { kind: "SUBSCRIPTION", status: "paid", paidAt: { not: null }, ...(settledThrough ? {} : { backfilled: false }) }, orderBy: { paidAt: "asc" } }),
     db.commissionEntry.findMany({ where: { kind: "EARNED" }, distinct: ["invoiceId"], select: { invoiceId: true, clientId: true } }),
   ]);
   const earned = new Set(earnedInvoices.map((e) => e.invoiceId));
@@ -289,7 +292,9 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
   const actor = await requirePermission("ace.manage");
   const failed: Problem[] = [];
   let applied = 0;
-  for (let r of rows) {
+  // Additional packages first: their months must be set before a client's split posts their payments.
+  const ordered = [...rows.filter((r) => r.packageSubscriptionId), ...rows.filter((r) => !r.packageSubscriptionId)];
+  for (let r of ordered) {
     const fail = (error: string) => failed.push({ line: r.line, client: r.clientName, error });
     if (r.packageSubscriptionId) {
       // An additional package: only its months already earned (each package has its own window).
@@ -299,6 +304,9 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
         await db.clientSubscription.update({ where: { id: row.id }, data: { commissionMonthsBeforePortal: r.monthsBeforePortal } });
         await writeAudit({ actorId: actor.id, action: "package_commission_months_set", entity: "Client", entityId: row.clientId, before: { subscriptionId: row.stripeSubscriptionId, months: row.commissionMonthsBeforePortal }, after: { subscriptionId: row.stripeSubscriptionId, months: r.monthsBeforePortal, via: "import" } });
       }
+      if (r.settledThrough) await settleHistory(row.clientId, r.settledThrough);
+      // Payments since the settled date earn now (at the client's split, if it has one yet).
+      await recomputeClient(row.clientId);
       applied++;
       continue;
     }
@@ -318,10 +326,7 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
     const previousType = (await db.client.findUniqueOrThrow({ where: { id: r.clientId }, select: { type: true } })).type;
     // Type first: the commission window (12 Direct, 6 ACE) depends on it. Restored if the split is refused.
     if (r.type) await db.client.update({ where: { id: r.clientId }, data: { type: r.type } });
-    // Payments before the 'settled through' date were paid out by hand: treat them as history (never earn).
-    if (r.settledThrough) {
-      await db.invoice.updateMany({ where: { clientId: r.clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { lt: r.settledThrough } }, data: { backfilled: true } });
-    }
+    if (r.settledThrough) await settleHistory(r.clientId, r.settledThrough);
     if (r.shares.length) {
       const execs = await db.executive.findMany({ where: { active: true } });
       const id = (n: string) => execs.find((e) => norm(e.name) === norm(n))?.id;
@@ -352,4 +357,13 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
   }
   await writeAudit({ actorId: actor.id, action: "commission_import_applied", entity: "Import", entityId: new Date().toISOString(), after: { applied, failed: failed.length } });
   return { applied, failed };
+}
+
+/**
+ * Payments before the 'settled through' date were paid out by hand: history (never earn). Payments on or after it
+ * earn in the portal, even when the history load copied them (it marks everything it copies as history).
+ */
+async function settleHistory(clientId: string, settledThrough: Date) {
+  await db.invoice.updateMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { lt: settledThrough } }, data: { backfilled: true } });
+  await db.invoice.updateMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { gte: settledThrough }, backfilled: true }, data: { backfilled: false } });
 }

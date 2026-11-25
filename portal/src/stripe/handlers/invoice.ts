@@ -2,7 +2,7 @@ import type Stripe from "stripe";
 import type { Invoice, InvoiceKind } from "@prisma/client";
 import { db } from "@/lib/db";
 import { clientForStripe } from "@/clients/subscriptions";
-import { idOf, isCardFeeLine, isOnboardingLine, subscriptionIdOf } from "@/stripe/lines";
+import { idOf, isCardFeeLine, isOnboardingLine, subscriptionIdOf, netLineAmount } from "@/stripe/lines";
 
 const fromTs = (t: number | null | undefined) => (t ? new Date(t * 1000) : null);
 
@@ -40,8 +40,9 @@ export async function upsertInvoiceFromStripe(
     return null;
   }
   const lines = inv.lines?.data ?? [];
-  const cardFeeCents = lines.filter(isCardFeeLine).reduce((n, l) => n + l.amount, 0);
-  const onboardingCents = lines.filter(isOnboardingLine).reduce((n, l) => n + l.amount, 0);
+  // After discounts: a coupon on the subscription also reduces the fee lines, and commission is on what's left.
+  const cardFeeCents = lines.filter(isCardFeeLine).reduce((n, l) => n + netLineAmount(l), 0);
+  const onboardingCents = lines.filter(isOnboardingLine).reduce((n, l) => n + netLineAmount(l), 0);
   const legacyTax = (inv as unknown as { tax?: number | null }).tax;
   const taxCents = inv.total_taxes ? inv.total_taxes.reduce((n, x) => n + x.amount, 0) : legacyTax ?? 0;
   const discountCents = (inv.total_discount_amounts ?? []).reduce((n, d) => n + d.amount, 0);
