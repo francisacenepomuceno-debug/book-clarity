@@ -80,13 +80,11 @@ export async function syncClientsFromSnapshot(rows: LiveClientRow[]): Promise<vo
     }
     const phone = r.phone ?? existing.phone;
     const contactChanged = r.email !== existing.email || phone !== existing.phone;
-    // When several companies share this Stripe customer, each keeps its own company name.
-    const shared = (await db.client.count({ where: { stripeCustomerId: r.customerId } })) > 1;
     await db.client.update({
       where: { id: existing.id },
       // A changed email/phone means the cached GHL contact may be the wrong person: look it up again next time.
       data: {
-        ...(shared ? {} : { name: r.name }),
+        name: r.name,
         // Stripe's business name only fills a missing company name; one set in the portal is never overwritten.
         ...(!existing.companyName && r.companyName ? { companyName: r.companyName } : {}),
         email: r.email,
@@ -96,6 +94,8 @@ export async function syncClientsFromSnapshot(rows: LiveClientRow[]): Promise<vo
         ...(existing.packageId ? {} : { packageId: packageOf(r) }),
       },
     });
+    // Several companies can share this Stripe customer: they all have the same contact person.
+    await db.client.updateMany({ where: { stripeCustomerId: r.customerId, id: { not: existing.id }, name: { not: r.name } }, data: { name: r.name } });
   }
   // Every subscription (a client can pay for several packages, each billed on its own day).
   const clientIds = new Map(

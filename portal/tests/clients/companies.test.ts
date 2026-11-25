@@ -123,3 +123,25 @@ describe("company names on the dashboard and in the import", () => {
     expect((await planImport("client,months_already_earned\nRoe Roofing LLC,2\n", { createMissingExecutives: false })).ready).toHaveLength(1);
   });
 });
+
+describe("moving older renames into the company field", () => {
+  it("the migration moves renamed/separated names to companyName; the sync puts the contact back for every company of the customer", async () => {
+    await resetDb();
+    const a = await db.client.create({ data: { name: "Rename Co", stripeCustomerId: "cus_m", stripeSubscriptionId: "sub_m1" } });
+    const b = await db.client.create({ data: { name: "Split Co", stripeCustomerId: "cus_m", stripeSubscriptionId: "sub_m2" } });
+    const c = await db.client.create({ data: { name: "Never Renamed", stripeCustomerId: "cus_n", stripeSubscriptionId: "sub_n" } });
+    await db.auditLog.create({ data: { action: "client_renamed", entity: "Client", entityId: a.id } });
+    await db.auditLog.create({ data: { action: "company_separated", entity: "Client", entityId: b.id } });
+    const { readFileSync } = await import("node:fs");
+    await db.$executeRawUnsafe(readFileSync("prisma/migrations/20261125040000_company_name_from_renames/migration.sql", "utf8"));
+    expect((await db.client.findMany({ orderBy: { name: "asc" } })).map((x) => [x.name, x.companyName])).toEqual([
+      ["Never Renamed", null], ["Rename Co", "Rename Co"], ["Split Co", "Split Co"],
+    ]);
+    await syncClientsFromSnapshot([{ ...row("sub_m1", "Pat Contact"), customerId: "cus_m" }]);
+    const ids = [a.id, b.id];
+    expect((await db.client.findMany({ where: { id: { in: ids } }, orderBy: { companyName: "asc" } })).map((x) => [x.companyName, x.name])).toEqual([
+      ["Rename Co", "Pat Contact"], ["Split Co", "Pat Contact"],
+    ]);
+    expect((await db.client.findUniqueOrThrow({ where: { id: c.id } })).name).toBe("Never Renamed");
+  });
+});
