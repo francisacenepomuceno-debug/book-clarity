@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { loginAction, type FormState } from "@/auth/actions";
+import { PasswordInput } from "@/app/PasswordInput";
 
 export default function LoginPage() {
   const [state, action, pending] = useActionState<FormState, FormData>(loginAction, {});
@@ -15,7 +16,7 @@ export default function LoginPage() {
         </label>
         <label>
           Password
-          <input name="password" type="password" autoComplete="current-password" required />
+          <PasswordInput name="password" autoComplete="current-password" required />
         </label>
         {state.error && <p className="form-error">{state.error}</p>}
         <button disabled={pending}>{pending ? "Signing in…" : "Sign in"}</button>

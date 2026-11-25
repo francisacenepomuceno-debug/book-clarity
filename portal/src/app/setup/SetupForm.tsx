@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { setupAction, type CreateUserState } from "@/users/actions";
 import { CredentialsCard } from "@/users/ui/CredentialsCard";
+import { PasswordInput } from "@/app/PasswordInput";
 
 export function SetupForm({ loginUrl }: { loginUrl: string }) {
   const [state, action, pending] = useActionState<CreateUserState, FormData>(setupAction, {});
@@ -16,7 +17,7 @@ export function SetupForm({ loginUrl }: { loginUrl: string }) {
   }
   return (
     <form action={action}>
-      <label>Setup code (SETUP_TOKEN from Vercel)<input name="token" type="password" required /></label>
+      <label>Setup code (SETUP_TOKEN from Vercel)<PasswordInput name="token" required /></label>
       <label>Your email<input name="email" type="email" required /></label>
       <label>Your name<input name="name" required /></label>
       {state.error && <p className="form-error">{state.error}</p>}
