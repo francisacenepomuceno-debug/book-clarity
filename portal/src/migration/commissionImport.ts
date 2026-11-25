@@ -1,4 +1,4 @@
-import { recomputeClient } from "@/commissions/engine";
+import { recalculateOpenCommission } from "@/commissions/engine";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/auth/permissions";
 import { monthOf, packagePaidCents, startOfDayIn, validateSplit, windowMonthsFor } from "@/domain/commission";
@@ -135,7 +135,6 @@ export async function planImport(
   ]);
   const earned = new Set(earnedInvoices.map((e) => e.invoiceId));
   const seenClients = new Map<string, number>();
-  const execByName = new Map(execs.map((e) => [norm(e.name), e]));
   const free = new Map<string, number>();
   for (const s of freeSlots) free.set(`${s.batchId}:${s.packageId}`, (free.get(`${s.batchId}:${s.packageId}`) ?? 0) + 1);
 
@@ -210,9 +209,9 @@ export async function planImport(
       const rate = percent(r[`rate_${n}`]);
       if (!name && rate === null) continue;
       if (!name || rate === null || Number.isNaN(rate)) return fail(`Executive ${n} needs both a name and a rate.`);
-      if (execByName.get(norm(name))?.active === false) return fail(`"${name}" is an inactive executive. Reactivate them on the Commissions page first.`);
+      if (findExecutive(execs, name)?.active === false) return fail(`"${name}" is an inactive executive. Reactivate them on the Commissions page first.`);
       if (Math.abs(rate * 100 - Math.round(rate * 100)) > 1e-9) return fail(`Use at most two decimal places for rates (got ${rate}%).`);
-      if (!execByName.has(norm(name))) {
+      if (!findExecutive(execs, name)) {
         if (!opts.createMissingExecutives) return fail(`"${name}" isn't an executive in the portal. Add them on the Commissions page, or tick "create missing executives".`);
         newExecutives.push(name.trim().replace(/\s+/g, " "));
       }
@@ -309,8 +308,9 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
         await writeAudit({ actorId: actor.id, action: "package_commission_months_set", entity: "Client", entityId: row.clientId, before: { subscriptionId: row.stripeSubscriptionId, months: row.commissionMonthsBeforePortal }, after: { subscriptionId: row.stripeSubscriptionId, months: r.monthsBeforePortal, via: "import" } });
       }
       if (r.settledThrough) await settleHistory(row.clientId, r.settledThrough);
-      // Payments since the settled date earn now (at the client's split, if it has one yet).
-      await recomputeClient(row.clientId);
+      // Payments since the settled date earn now (at the client's split, if it has one yet); lines an earlier
+      // import posted in unpaid months are redone with these months.
+      await recalculateOpenCommission(row.clientId);
       applied++;
       continue;
     }
@@ -334,7 +334,7 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
     if (r.settledThrough) await settleHistory(r.clientId, r.settledThrough);
     if (r.shares.length) {
       const execs = await db.executive.findMany({ where: { active: true } });
-      const id = (n: string) => execs.find((e) => norm(e.name) === norm(n))?.id;
+      const id = (n: string) => findExecutive(execs, n)?.id;
       const res = await setClientCommission(r.clientId, {
         shares: r.shares.map((s) => ({ executiveId: id(s.executiveName) ?? "", ratePercent: s.ratePercent })),
         effectiveFrom: r.effectiveFrom,
@@ -358,6 +358,8 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
       const res = await assignSlot({ batchId: r.ace.batchId, packageId: r.ace.packageId, clientId: r.clientId, startOn: r.ace.startOn, confirmSubscribed: r.ace.historical });
       if (!res.ok) { fail(`Commission saved, but the ACE slot wasn't assigned: ${res.error}`); continue; }
     }
+    // Lines an earlier import posted in unpaid months are redone with this row's split and months.
+    await recalculateOpenCommission(r.clientId);
     applied++;
   }
   await writeAudit({ actorId: actor.id, action: "commission_import_applied", entity: "Import", entityId: new Date().toISOString(), after: { applied, failed: failed.length } });
@@ -371,4 +373,13 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
 async function settleHistory(clientId: string, settledThrough: Date) {
   await db.invoice.updateMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { lt: settledThrough } }, data: { backfilled: true } });
   await db.invoice.updateMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { gte: settledThrough }, backfilled: true }, data: { backfilled: false } });
+}
+
+/** An executive by name: an exact match, else the only one whose first name is that name ("Albert" → "Albert Assad"). */
+export function findExecutive<E extends { name: string }>(execs: E[], name: string): E | undefined {
+  const n = norm(name);
+  const exact = execs.find((e) => norm(e.name) === n);
+  if (exact) return exact;
+  const byFirst = execs.filter((e) => norm(e.name).split(" ")[0] === n);
+  return byFirst.length === 1 ? byFirst[0] : undefined;
 }

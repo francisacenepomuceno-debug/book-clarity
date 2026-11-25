@@ -2,7 +2,7 @@
 
 import { subscriptionRef } from "@/clients/subscriptions";
 import { revalidatePath } from "next/cache";
-import { addExecutive, setClientCommission, setPackageMonthsBeforePortal } from "@/commissions/splits";
+import { addExecutive, mergeExecutive, setClientCommission, setPackageMonthsBeforePortal } from "@/commissions/splits";
 import { markStatementPaid } from "@/commissions/statements";
 import { startOfDayIn } from "@/domain/commission";
 import { db } from "@/lib/db";
@@ -52,5 +52,12 @@ export async function setPackageMonthsAction(_: FormResult, form: FormData): Pro
   const r = await setPackageMonthsBeforePortal(sub, Number(form.get("months")));
   if (!r.ok) return { error: r.error };
   revalidatePath(`/clients/${String(form.get("pageKey") ?? sub)}`);
+  return { ok: true };
+}
+
+export async function mergeExecutiveAction(_: FormResult, form: FormData): Promise<FormResult> {
+  const r = await mergeExecutive(String(form.get("fromId") ?? ""), String(form.get("intoId") ?? ""));
+  if (!r.ok) return { error: r.error };
+  revalidatePath("/commissions");
   return { ok: true };
 }

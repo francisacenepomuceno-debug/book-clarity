@@ -47,9 +47,9 @@ export async function listStatements(): Promise<StatementRow[]> {
 export async function statementLines(executiveId: string, month: string) {
   await requirePermission("commissions.view");
   const entries = await db.commissionEntry.findMany({ where: { executiveId, month }, orderBy: [{ occurredAt: "asc" }, { kind: "asc" }] });
-  const clients = await db.client.findMany({ where: { id: { in: [...new Set(entries.map((e) => e.clientId))] } }, select: { id: true, name: true, type: true, stripeSubscriptionId: true, commissionMonthsBeforePortal: true } });
+  const clients = await db.client.findMany({ where: { id: { in: [...new Set(entries.map((e) => e.clientId))] } }, select: { id: true, name: true, companyName: true, type: true, stripeSubscriptionId: true, commissionMonthsBeforePortal: true } });
   const invoices = await db.invoice.findMany({ where: { id: { in: entries.map((e) => e.invoiceId) } }, select: { id: true, stripeInvoiceId: true, stripeSubscriptionId: true } });
-  const clientName = new Map(clients.map((c) => [c.id, c.name]));
+  const clientName = new Map(clients.map((c) => [c.id, c.companyName ? `${c.companyName} (${c.name})` : c.name]));
   const clientById = new Map(clients.map((c) => [c.id, c]));
   const stripeId = new Map(invoices.map((i) => [i.id, i.stripeInvoiceId]));
   const subOf = new Map(invoices.map((i) => [i.id, i.stripeSubscriptionId]));

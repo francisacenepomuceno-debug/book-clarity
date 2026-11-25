@@ -36,7 +36,7 @@ export async function MonthlyBreakdown({ month, thisMonth }: { month: string; th
             <table>
               <thead>
                 <tr>
-                  <th>Client</th><th>Payout</th><th>Final payout</th><th className="num">Client paid</th><th>Method</th><th className="num">Rate</th><th className="num">Commission</th><th>Notes</th>
+                  <th>Company</th><th>Payout</th><th>Final payout</th><th className="num">Client paid</th><th>Method</th><th className="num">Rate</th><th className="num">Commission</th><th>Notes</th>
                 </tr>
               </thead>
               {ex.groups.map((g) => (
@@ -48,7 +48,7 @@ export async function MonthlyBreakdown({ month, thisMonth }: { month: string; th
                   </tr>
                   {g.rows.map((r, i) => (
                     <tr key={i} className={r.expected ? "expected" : undefined}>
-                      <td><a href={r.href}>{r.clientName}</a></td>
+                      <td><a href={r.href}>{r.clientName}</a>{r.contactName && <div className="muted">{r.contactName}</div>}</td>
                       <td>{r.payout}</td>
                       <td>{r.finalMonth ? fmtMonth(r.finalMonth) : "—"}</td>
                       <td className="num">{r.paidCents != null ? <>{formatUsd(r.paidCents)}<br /><span className="muted">{fmtDate(r.paidAt)}</span></> : "—"}</td>
