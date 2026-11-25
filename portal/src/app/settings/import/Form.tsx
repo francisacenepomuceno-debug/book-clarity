@@ -13,7 +13,7 @@ export function ImportForm() {
         <details><summary>…or paste the rows</summary><textarea name="csv" rows={8} style={{ width: "100%", fontFamily: "monospace" }} defaultValue={s.csv ?? ""} /></details>
         <label>Commission settled outside the portal up to (not including)
           <input type="date" name="settled" defaultValue={s.settled ?? ""} />
-          <span className="muted" style={{ fontWeight: 400 }}>Usually the first day after the last commission you paid by hand. Payments before this date never earn commission in the portal; your "months already earned" should count those months.</span>
+          <span className="muted" style={{ fontWeight: 400 }}>Usually the first day after the last commission you paid by hand. Bills issued before this date never earn commission in the portal, even if the client pays them later (they belong to the months you already paid); your "months already earned" should count those months.</span>
         </label>
         <label className="check"><input type="checkbox" name="create" defaultChecked={s.create} /> Create executives that aren't in the portal yet</label>
         <label className="check"><input type="checkbox" name="addClients" defaultChecked={s.addClients} /> Add clients who aren't in the portal yet (e.g. ACE clients who aren't in Stripe), using the contact_email, phone and package columns</label>

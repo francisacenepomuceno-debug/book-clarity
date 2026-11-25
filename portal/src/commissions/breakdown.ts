@@ -104,6 +104,14 @@ export async function monthlyBreakdown(month: string, now: Date = new Date()): P
   for (const ex of executives) {
     const rows: (BreakdownRow & { packageName: string })[] = [];
     const earnedKeys = new Set<string>();
+    // A client can pay two bills in one month: the run's final payout follows from the latest one.
+    const latestIndex = new Map<string, number>();
+    for (const e of entries.filter((x) => x.executiveId === ex.id && x.kind === "EARNED" && x.windowIndex)) {
+      const c = clientById.get(e.clientId);
+      if (!c) continue;
+      const k = `${c.id}|${groupOf(c, invoiceById.get(e.invoiceId)?.stripeSubscriptionId ?? null).key}`;
+      latestIndex.set(k, Math.max(latestIndex.get(k) ?? 0, e.windowIndex!));
+    }
     for (const e of entries.filter((x) => x.executiveId === ex.id)) {
       const c = clientById.get(e.clientId);
       if (!c) continue;
@@ -122,7 +130,7 @@ export async function monthlyBreakdown(month: string, now: Date = new Date()): P
         contactName: c.companyName ? c.name : null,
         href: hrefOf(c),
         payout: e.kind === "ACE_PREPAID" ? "ACE 1–6" : e.windowIndex ? `${e.windowIndex} of ${g.windowMonths}` : "—",
-        finalMonth: e.kind === "EARNED" && e.windowIndex ? addMonths(month, g.windowMonths - e.windowIndex) : null,
+        finalMonth: e.kind === "EARNED" && e.windowIndex ? addMonths(month, g.windowMonths - (latestIndex.get(`${c.id}|${g.key}`) ?? e.windowIndex)) : null,
         paidCents: inv ? inv.amountPaidCents : null,
         paidAt: inv?.paidAt ?? e.occurredAt,
         method: inv ? methodLabel(inv) : null,

@@ -262,7 +262,7 @@ export async function planImport(
       // The main package's window (the one "months already earned" refers to); other packages have their own.
       const mainSub = "stripeSubscriptionId" in client ? client.stripeSubscriptionId : null;
       const mine = paidInvoices.filter((p) => p.clientId === client.id && packagePaidCents(p) > 0 && (!p.stripeSubscriptionId || !mainSub || p.stripeSubscriptionId === mainSub));
-      const counted = mine.filter((p) => !settledThrough || p.paidAt! >= settledThrough);
+      const counted = mine.filter((p) => !settledThrough || p.billedAt >= settledThrough);
       const already = counted.filter((p) => earned.has(p.id)).length;
       const room = Math.max(0, window - (monthsBeforePortal ?? client.commissionMonthsBeforePortal) - already);
       willPost = counted.filter((p) => !earned.has(p.id)).slice(0, room).map((p) => monthOf(p.paidAt!, TZ));
@@ -367,12 +367,13 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
 }
 
 /**
- * Payments before the 'settled through' date were paid out by hand: history (never earn). Payments on or after it
- * earn in the portal, even when the history load copied them (it marks everything it copies as history).
+ * Bills issued before the 'settled through' date were paid out by hand: history (never earn), even when the client
+ * paid them late, after that date (commission was paid for the month the bill was for). Bills issued on or after it
+ * earn in the portal once paid, even when the history load copied them (it marks everything it copies as history).
  */
 async function settleHistory(clientId: string, settledThrough: Date) {
-  await db.invoice.updateMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { lt: settledThrough } }, data: { backfilled: true } });
-  await db.invoice.updateMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", paidAt: { gte: settledThrough }, backfilled: true }, data: { backfilled: false } });
+  await db.invoice.updateMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", billedAt: { lt: settledThrough } }, data: { backfilled: true } });
+  await db.invoice.updateMany({ where: { clientId, kind: "SUBSCRIPTION", status: "paid", billedAt: { gte: settledThrough }, backfilled: true }, data: { backfilled: false } });
 }
 
 /** An executive by name: an exact match, else the only one whose first name is that name ("Albert" → "Albert Assad"). */
