@@ -122,12 +122,12 @@ export async function setClientCommission(
   return { ok: true };
 }
 
-export async function unassignedClients(): Promise<{ id: string; name: string; status: ClientStatus; stripeSubscriptionId: string | null }[]> {
+export async function unassignedClients(): Promise<{ id: string; name: string; companyName: string | null; status: ClientStatus; stripeSubscriptionId: string | null }[]> {
   const assigned = await db.commissionShare.findMany({ distinct: ["clientId"], select: { clientId: true } });
   return db.client.findMany({
     where: { status: { not: "ENDED" }, id: { notIn: assigned.map((a) => a.clientId) } },
-    select: { id: true, name: true, status: true, stripeSubscriptionId: true },
-    orderBy: { name: "asc" },
+    select: { id: true, name: true, companyName: true, status: true, stripeSubscriptionId: true },
+    orderBy: [{ companyName: { sort: "asc", nulls: "last" } }, { name: "asc" }],
   });
 }
 

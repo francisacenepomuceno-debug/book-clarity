@@ -8,7 +8,10 @@ import { commissionGroup } from "@/commissions/engine";
 const tz = () => process.env.BUSINESS_TZ ?? "America/New_York";
 
 export type BreakdownRow = {
+  /** The company (or the contact's name when no company is set). */
   clientName: string;
+  /** The contact person, when a company name is set. */
+  contactName: string | null;
   href: string;
   /** "8 of 12", "ACE 1–6", or "—" for a refund. */
   payout: string;
@@ -115,7 +118,8 @@ export async function monthlyBreakdown(month: string, now: Date = new Date()): P
       notes.push(...otherOwners(c, ex.id, e.occurredAt));
       rows.push({
         packageName: e.kind === "ACE_PREPAID" ? `ACE: ${g.packageName}` : g.packageName,
-        clientName: c.name,
+        clientName: c.companyName || c.name,
+        contactName: c.companyName ? c.name : null,
         href: hrefOf(c),
         payout: e.kind === "ACE_PREPAID" ? "ACE 1–6" : e.windowIndex ? `${e.windowIndex} of ${g.windowMonths}` : "—",
         finalMonth: e.kind === "EARNED" && e.windowIndex ? addMonths(month, g.windowMonths - e.windowIndex) : null,
@@ -152,7 +156,8 @@ export async function monthlyBreakdown(month: string, now: Date = new Date()): P
           const base = last ? packagePaidCents(last) : pkg && !pkg.isCustom ? pkg.monthlyPriceCents : 0;
           rows.push({
             packageName: g.packageName,
-            clientName: c.name,
+            clientName: c.companyName || c.name,
+        contactName: c.companyName ? c.name : null,
             href: hrefOf(c),
             payout: `${earned + 1} of ${g.windowMonths}`,
             finalMonth: addMonths(month, g.windowMonths - (earned + 1)),

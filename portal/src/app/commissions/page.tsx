@@ -71,7 +71,7 @@ export default async function CommissionsPage({ searchParams }: { searchParams: 
               <ul className="plain">
                 {unassigned.map((c) => (
                   <li key={c.id}>
-                    <a href={`/clients/${c.stripeSubscriptionId ?? c.id}#commission`}>{c.name}</a>{" "}
+                    <a href={`/clients/${c.stripeSubscriptionId ?? c.id}#commission`}>{c.companyName || c.name}</a>{c.companyName && <span className="muted"> ({c.name})</span>}{" "}
                     <span className="muted">· {STATUS_LABEL[c.status]}</span>
                   </li>
                 ))}

@@ -191,3 +191,20 @@ export async function recomputeClient(clientId: string): Promise<number> {
   for (const inv of paid) created += await recordPaymentCommission(inv.id);
   return created;
 }
+
+/**
+ * Re-does a client's commission in months not yet paid: their payment lines there are removed and posted again with
+ * the client's current split and months already earned. Paid months are never touched. Used by the commission
+ * import, so a corrected file fixes lines an earlier import posted.
+ */
+export async function recalculateOpenCommission(clientId: string): Promise<number> {
+  const paidStatements = await db.commissionStatement.findMany({ where: { status: "PAID" }, select: { executiveId: true, month: true } });
+  const paidKey = new Set(paidStatements.map((s) => `${s.executiveId}|${s.month}`));
+  const lines = await db.commissionEntry.findMany({ where: { clientId, kind: "EARNED" }, select: { id: true, executiveId: true, month: true, invoiceId: true } });
+  const open = lines.filter((l) => !paidKey.has(`${l.executiveId}|${l.month}`));
+  // An invoice with a line in a paid month stays as it is (all its lines), so nothing is paid twice.
+  const lockedInvoices = new Set(lines.filter((l) => paidKey.has(`${l.executiveId}|${l.month}`)).map((l) => l.invoiceId));
+  const remove = open.filter((l) => !lockedInvoices.has(l.invoiceId)).map((l) => l.id);
+  if (remove.length) await db.commissionEntry.deleteMany({ where: { id: { in: remove } } });
+  return recomputeClient(clientId);
+}

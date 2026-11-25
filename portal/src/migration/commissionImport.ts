@@ -1,4 +1,4 @@
-import { recomputeClient } from "@/commissions/engine";
+import { recalculateOpenCommission } from "@/commissions/engine";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/auth/permissions";
 import { monthOf, packagePaidCents, startOfDayIn, validateSplit, windowMonthsFor } from "@/domain/commission";
@@ -308,8 +308,9 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
         await writeAudit({ actorId: actor.id, action: "package_commission_months_set", entity: "Client", entityId: row.clientId, before: { subscriptionId: row.stripeSubscriptionId, months: row.commissionMonthsBeforePortal }, after: { subscriptionId: row.stripeSubscriptionId, months: r.monthsBeforePortal, via: "import" } });
       }
       if (r.settledThrough) await settleHistory(row.clientId, r.settledThrough);
-      // Payments since the settled date earn now (at the client's split, if it has one yet).
-      await recomputeClient(row.clientId);
+      // Payments since the settled date earn now (at the client's split, if it has one yet); lines an earlier
+      // import posted in unpaid months are redone with these months.
+      await recalculateOpenCommission(row.clientId);
       applied++;
       continue;
     }
@@ -357,6 +358,8 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
       const res = await assignSlot({ batchId: r.ace.batchId, packageId: r.ace.packageId, clientId: r.clientId, startOn: r.ace.startOn, confirmSubscribed: r.ace.historical });
       if (!res.ok) { fail(`Commission saved, but the ACE slot wasn't assigned: ${res.error}`); continue; }
     }
+    // Lines an earlier import posted in unpaid months are redone with this row's split and months.
+    await recalculateOpenCommission(r.clientId);
     applied++;
   }
   await writeAudit({ actorId: actor.id, action: "commission_import_applied", entity: "Import", entityId: new Date().toISOString(), after: { applied, failed: failed.length } });
