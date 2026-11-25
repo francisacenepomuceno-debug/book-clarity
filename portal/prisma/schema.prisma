@@ -132,6 +132,8 @@ model ClientSubscription {
 }
 
 model Client {
+  /// The client's company (business) name; `name` is the contact person (Stripe's customer name).
+  companyName           String?
   id                           String               @id @default(cuid())
   name                         String
   email                        String?

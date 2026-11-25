@@ -49,7 +49,7 @@ describe("client onboarding steps", () => {
     expect(o).toMatchObject({ signerName: "Jane Doe", signerIp: "203.0.113.9", quickbooks: "Need QBO" });
     expect(o.contractVersion).toHaveLength(12);
     expect((await db.notification.findMany()).map((n) => n.key)).toContain(`countersign-request:${id}`);
-    expect((await db.client.findUniqueOrThrow({ where: { id: o.clientId } })).name).toBe("Acme LLC");
+    expect(await db.client.findUniqueOrThrow({ where: { id: o.clientId } })).toMatchObject({ companyName: "Acme LLC", name: "Jane Doe" });
 
     // payment comes next; a later step can't be done first
     expect((await loadOnboarding(token)).step).toBe("payment");

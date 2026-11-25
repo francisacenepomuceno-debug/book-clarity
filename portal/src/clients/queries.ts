@@ -8,7 +8,7 @@ import type { ClientStatus } from "@/domain/clientStatus";
 import { discountState } from "@/domain/pricing";
 import { ensureClientSubscription } from "@/clients/subscriptions";
 
-type Base = Pick<LiveClientRow, "subscriptionId" | "name" | "status" | "packageName" | "sixMonthContract" | "nextChargeDate" | "pastDueSince"> & { clientType: "DIRECT" | "ACE" };
+type Base = Pick<LiveClientRow, "subscriptionId" | "name" | "companyName" | "status" | "packageName" | "sixMonthContract" | "nextChargeDate" | "pastDueSince"> & { clientType: "DIRECT" | "ACE" };
 type Financial = Pick<
   LiveClientRow,
   "customerId" | "email" | "packageMonthlyCents" | "cardFeeMonthlyCents" | "hasDiscount" | "autopay" | "paymentMethod" | "amountDueCents" | "listPriceCents" | "discounted"
@@ -20,6 +20,7 @@ export function scopeRow(r: LiveClientRow, role: Role): ClientRow {
   const base: Base = {
     subscriptionId: r.subscriptionId,
     name: r.name,
+    companyName: r.companyName ?? null,
     status: r.status,
     packageName: r.packageName,
     sixMonthContract: r.sixMonthContract,
@@ -67,6 +68,7 @@ export async function syncClientsFromSnapshot(rows: LiveClientRow[]): Promise<vo
           stripeCustomerId: r.customerId,
           stripeSubscriptionId: r.subscriptionId,
           name: r.name,
+          companyName: r.companyName ?? null,
           email: r.email,
           phone: r.phone ?? null,
           status: r.status,
@@ -85,6 +87,8 @@ export async function syncClientsFromSnapshot(rows: LiveClientRow[]): Promise<vo
       // A changed email/phone means the cached GHL contact may be the wrong person: look it up again next time.
       data: {
         ...(shared ? {} : { name: r.name }),
+        // Stripe's business name only fills a missing company name; one set in the portal is never overwritten.
+        ...(!existing.companyName && r.companyName ? { companyName: r.companyName } : {}),
         email: r.email,
         phone,
         ...(contactChanged ? { ghlContactId: null } : {}),
@@ -130,8 +134,12 @@ export async function withClientTypes(rows: LiveClientRow[]): Promise<LiveClient
 export async function withPricing(rows: LiveClientRow[]): Promise<LiveClientRow[]> {
   const ids = rows.map((r) => r.subscriptionId);
   // A subscription's own package if set; for a client's main subscription, the client's package.
-  const subRows = await db.clientSubscription.findMany({ where: { stripeSubscriptionId: { in: ids } }, select: { stripeSubscriptionId: true, packageId: true, client: { select: { name: true, stripeCustomerId: true } } } });
-  const mains = await db.client.findMany({ where: { stripeSubscriptionId: { in: ids } }, select: { stripeSubscriptionId: true, packageId: true } });
+  const subRows = await db.clientSubscription.findMany({ where: { stripeSubscriptionId: { in: ids } }, select: { stripeSubscriptionId: true, packageId: true, client: { select: { name: true, companyName: true, stripeCustomerId: true } } } });
+  const mains = await db.client.findMany({ where: { stripeSubscriptionId: { in: ids } }, select: { stripeSubscriptionId: true, packageId: true, companyName: true } });
+  // Each subscription's company: its own client's (several companies can share one Stripe customer).
+  const companyOf = new Map<string, string | null>();
+  for (const m of mains) companyOf.set(m.stripeSubscriptionId!, m.companyName);
+  for (const s of subRows) companyOf.set(s.stripeSubscriptionId, s.client.companyName);
   // Companies sharing a Stripe customer are shown under their own name (Stripe has one name per customer).
   const sharedCustomers = new Set(
     (await db.client.groupBy({ by: ["stripeCustomerId"], where: { stripeCustomerId: { in: rows.map((r) => r.customerId) } }, _count: { _all: true } }))
@@ -149,7 +157,7 @@ export async function withPricing(rows: LiveClientRow[]): Promise<LiveClientRow[
     const p = id ? pkgById.get(id) ?? null : null;
     const listPriceCents = p && !p.isCustom ? p.monthlyPriceCents : null;
     const packageName = p && (r.packageName === "—" || r.packageName.startsWith("Other:")) ? p.name : r.packageName;
-    return { ...r, name: nameOf.get(r.subscriptionId) ?? r.name, packageName, listPriceCents, discounted: discountState(r, listPriceCents).discounted };
+    return { ...r, name: nameOf.get(r.subscriptionId) ?? r.name, companyName: companyOf.get(r.subscriptionId) ?? r.companyName ?? null, packageName, listPriceCents, discounted: discountState(r, listPriceCents).discounted };
   });
 }
 
@@ -172,6 +180,7 @@ export async function aceDashboardRows(): Promise<LiveClientRow[]> {
     customerId: c.stripeCustomerId ?? "",
     subscriptionId: c.id,
     name: c.name,
+    companyName: c.companyName,
     email: c.email,
     status: c.status,
     packageName: c.packageId ? name.get(c.packageId) ?? "—" : "—",

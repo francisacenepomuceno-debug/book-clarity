@@ -51,7 +51,7 @@ export function ClientSearch({ tableId }: { tableId: string }) {
         value={q}
         onChange={(e) => setQ(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") setQ(""); }}
-        placeholder="Search clients by name, email or package…  ( / )"
+        placeholder="Search by company, contact, email or package…  ( / )"
         aria-label="Search clients"
       />
       {shown !== null && <span className="muted">{shown === 0 ? "No clients match." : `${shown} match${shown === 1 ? "" : "es"}`}</span>}

@@ -76,7 +76,8 @@ export async function saveDetails(token: string, d: Details, now: Date = new Dat
   const missing = REQUIRED.filter((k) => !clean[k]);
   if (missing.length) return { ok: false, error: "Please fill in every field (Address line 2 is optional)." };
   const ok = await advance(l.onboarding.id, {}, { details: clean }, now);
-  if (ok) await db.client.update({ where: { id: l.client.id }, data: { name: clean.business, phone: clean.phone, billingState: clean.state, ghlContactId: null } });
+  // The business is the company; the person signing is the contact (as for clients who came from Stripe).
+  if (ok) await db.client.update({ where: { id: l.client.id }, data: { companyName: clean.business, name: clean.signerName || l.client.name, phone: clean.phone, billingState: clean.state, ghlContactId: null } });
   return { ok: true };
 }
 

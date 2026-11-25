@@ -6,7 +6,10 @@ export type LiveClientRow = {
   clientType?: "DIRECT" | "ACE";
   customerId: string;
   subscriptionId: string;
+  /** The contact person (Stripe's customer name). */
   name: string;
+  /** The company: set in the portal, or Stripe's business name. */
+  companyName?: string | null;
   email: string | null;
   phone?: string | null;
   status: ClientStatus;
@@ -114,6 +117,7 @@ export function mapSubscription(
     customerId: customer?.id ?? idOf(sub.customer as string) ?? "",
     subscriptionId: sub.id,
     name: customer?.name || customer?.email || "(no name)",
+    companyName: (customer as { business_name?: string | null } | null)?.business_name?.trim() || null,
     email: customer?.email ?? null,
     phone: customer?.phone ?? null,
     status,

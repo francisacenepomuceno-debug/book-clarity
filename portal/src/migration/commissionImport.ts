@@ -8,10 +8,10 @@ import { writeAudit } from "@/audit/log";
 
 /** The columns Book Clarity fills in (one row per client). Download from the import page. */
 export const IMPORT_TEMPLATE = [
-  "client,type,executive_1,rate_1,executive_2,rate_2,months_already_earned,effective_from,ace_batch,ace_start_date",
-  "Acme LLC,Direct,Jose,10%,,,4,,,",
-  "ops@example.com,Direct,Jose,5%,Albert,5%,0,,,",
-  "cus_ABC123,ACE,Albert,10%,,,0,,Spring 2026 batch,2026-03-10",
+  "client,company,type,executive_1,rate_1,executive_2,rate_2,months_already_earned,effective_from,ace_batch,ace_start_date",
+  "Acme LLC,Acme LLC,Direct,Jose,10%,,,4,,,",
+  "ops@example.com,Ops Co,Direct,Jose,5%,Albert,5%,0,,,",
+  "cus_ABC123,,ACE,Albert,10%,,,0,,Spring 2026 batch,2026-03-10",
 ].join("\n");
 
 const ALIASES: Record<string, string> = {
@@ -25,6 +25,7 @@ const ALIASES: Record<string, string> = {
   effective_from: "effective_from", "effective from": "effective_from",
   ace_batch: "ace_batch", "ace batch": "ace_batch", batch: "ace_batch",
   ace_start_date: "ace_start_date", "ace start date": "ace_start_date", "start date": "ace_start_date",
+  company: "company", "company name": "company", business: "company", "business name": "company",
   // Only used to add a client who isn't in the portal yet:
   contact_email: "contact_email", "contact email": "contact_email",
   phone: "phone", "phone number": "phone",
@@ -82,6 +83,8 @@ export type ReadyRow = {
   /** A client who isn't in the portal yet, added on Apply. */
   create?: { name: string; email: string | null; phone: string | null; packageId: string | null; type: "DIRECT" | "ACE" };
   clientName: string;
+  /** Sets the client's company name (empty: unchanged). */
+  companyName?: string;
   type: "DIRECT" | "ACE" | null;
   shares: { executiveName: string; ratePercent: number }[];
   newExecutives: string[];
@@ -169,7 +172,7 @@ export async function planImport(
       ? clients.filter((c) => c.stripeCustomerId === key)
       : key.includes("@")
         ? clients.filter((c) => c.email?.toLowerCase() === key.toLowerCase())
-        : clients.filter((c) => norm(c.name) === norm(key));
+        : clients.filter((c) => norm(c.name) === norm(key) || (c.companyName != null && norm(c.companyName) === norm(key)));
     if (matches.length > 1) return fail(`More than one client matches "${key}". Use their email or Stripe customer ID (cus_…) instead.`);
     let create: ReadyRow["create"];
     if (matches.length === 0) {
@@ -270,6 +273,7 @@ export async function planImport(
 
     ready.push({
       line,
+      ...(r.company?.trim() ? { companyName: r.company.trim().replace(/\s+/g, " ") } : {}),
       create,
       willPost,
       aceLumpSum: !!ace && !ace.historical,
@@ -323,6 +327,7 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
       if (!existing) await writeAudit({ actorId: actor.id, action: "client_added_by_import", entity: "Client", entityId: c.id, after: r.create });
       r = { ...r, clientId: c.id };
     }
+    if (r.companyName) await db.client.update({ where: { id: r.clientId }, data: { companyName: r.companyName } });
     const previousType = (await db.client.findUniqueOrThrow({ where: { id: r.clientId }, select: { type: true } })).type;
     // Type first: the commission window (12 Direct, 6 ACE) depends on it. Restored if the split is refused.
     if (r.type) await db.client.update({ where: { id: r.clientId }, data: { type: r.type } });

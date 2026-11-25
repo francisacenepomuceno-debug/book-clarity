@@ -52,7 +52,7 @@ describe("several companies sharing one Stripe customer", () => {
 
     const r = await separateCompany(MM, "Mundo Media");
     expect(r.ok).toBe(true);
-    const mm = await db.client.findFirstOrThrow({ where: { name: "Mundo Media" } });
+    const mm = await db.client.findFirstOrThrow({ where: { companyName: "Mundo Media" } });
     expect(mm).toMatchObject({ stripeCustomerId: "cus_I", stripeSubscriptionId: MM, packageId: ess, type: "DIRECT", commissionMonthsBeforePortal: 4 });
     expect(await db.invoice.count({ where: { clientId: mm.id } })).toBe(1);
     expect(await db.invoice.count({ where: { clientId: ivan } })).toBe(1);
@@ -75,7 +75,7 @@ describe("several companies sharing one Stripe customer", () => {
     await paid(HP);
     const r = await separateCompany(HP, "Hispanic Plug");
     expect(r.ok).toBe(true);
-    const hp = await db.client.findFirstOrThrow({ where: { name: "Hispanic Plug" } });
+    const hp = await db.client.findFirstOrThrow({ where: { companyName: "Hispanic Plug" } });
     // The moved main package keeps its months (3) and package; the old client's new main is the next package, with its own months (4).
     expect(hp).toMatchObject({ stripeSubscriptionId: HP, packageId: ess, commissionMonthsBeforePortal: 3 });
     expect(await db.invoice.count({ where: { clientId: hp.id } })).toBe(1);
@@ -85,12 +85,17 @@ describe("several companies sharing one Stripe customer", () => {
     expect((await db.clientSubscription.findUniqueOrThrow({ where: { stripeSubscriptionId: old.stripeSubscriptionId! } })).commissionMonthsBeforePortal).toBe(0);
   });
 
-  it("names: each company keeps its own name; the dashboard shows it instead of Stripe's customer name", async () => {
+  it("names: each company keeps its own company name; the contact stays Stripe's customer name", async () => {
     await separateCompany(MM, "Mundo Media");
     expect(await renameClient(ivan, "Hispanic Plug")).toEqual({ ok: true });
     await syncClientsFromSnapshot([row(HP), row(MM), row(ARAP)]);
-    expect((await db.client.findMany({ where: { stripeCustomerId: "cus_I" }, orderBy: { name: "asc" } })).map((c) => c.name)).toEqual(["Hispanic Plug", "Mundo Media"]);
-    expect((await withPricing([row(HP), row(MM)])).map((r) => r.name)).toEqual(["Hispanic Plug", "Mundo Media"]);
+    // Each company keeps its own company name; the contact person stays Stripe's customer name.
+    const both = await db.client.findMany({ where: { stripeCustomerId: "cus_I" }, orderBy: { companyName: "asc" } });
+    expect(both.map((c) => [c.companyName, c.name])).toEqual([["Hispanic Plug", "Ivan Shammas"], ["Mundo Media", "Ivan Shammas"]]);
+    expect((await withPricing([row(HP), row(MM)])).map((r) => r.companyName)).toEqual(["Hispanic Plug", "Mundo Media"]);
+    // A business name in Stripe only fills a missing company name.
+    await syncClientsFromSnapshot([{ ...row(HP), companyName: "From Stripe" }]);
+    expect((await db.client.findUniqueOrThrow({ where: { id: ivan } })).companyName).toBe("Hispanic Plug");
   });
 
   it("refuses for a client's only package, and for Admins", async () => {
@@ -99,5 +104,22 @@ describe("several companies sharing one Stripe customer", () => {
     as("ADMIN");
     expect((await separateCompany(MM, "Y")).ok).toBe(false);
     expect((await renameClient(ivan, "Z")).ok).toBe(false);
+  });
+});
+
+describe("company names on the dashboard and in the import", () => {
+  it("a new client from Stripe takes Stripe's business name as its company; the import can set it", async () => {
+    await resetDb();
+    await db.user.create({ data: { id: "u1", email: "u@bc.test", name: "U", role: "SUPER_ADMIN" } });
+    as("SUPER_ADMIN");
+    await syncClientsFromSnapshot([{ ...row("sub_x", "Pat Lee"), customerId: "cus_x", companyName: "Lee Plumbing" }, { ...row("sub_y", "Sam Roe"), customerId: "cus_y" }]);
+    expect((await db.client.findMany({ orderBy: { name: "asc" } })).map((c) => [c.name, c.companyName])).toEqual([["Pat Lee", "Lee Plumbing"], ["Sam Roe", null]]);
+    const { planImport, applyImport } = await import("@/migration/commissionImport");
+    const plan = await planImport("client,company\ncus_y,Roe Roofing LLC\n", { createMissingExecutives: false });
+    expect(plan.ready[0].companyName).toBe("Roe Roofing LLC");
+    await applyImport(plan.ready);
+    expect((await db.client.findFirstOrThrow({ where: { stripeCustomerId: "cus_y" } })).companyName).toBe("Roe Roofing LLC");
+    // Rows can then be matched by company name too.
+    expect((await planImport("client,months_already_earned\nRoe Roofing LLC,2\n", { createMissingExecutives: false })).ready).toHaveLength(1);
   });
 });
