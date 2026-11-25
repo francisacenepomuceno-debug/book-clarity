@@ -35,12 +35,14 @@ describe("card fee after a discount", () => {
 });
 
 describe("commission import after 'Load invoice history'", () => {
-  it("payments on or after the settled date earn, even though the history load copied them", async () => {
+  it("bills issued on or after the settled date earn once paid (even though the history load copied them); an earlier bill paid late doesn't", async () => {
     const pkg = await db.package.create({ data: { name: "Essentials", monthlyPriceCents: 35000, onboardingFeeCents: 0 } });
     const c = await db.client.create({ data: { name: "Acme LLC", stripeCustomerId: "cus_h", stripeSubscriptionId: "sub_h", packageId: pkg.id, status: "CURRENT" } });
-    const paid = (id: string, at: string) => db.invoice.create({ data: { stripeInvoiceId: id, clientId: c.id, stripeSubscriptionId: "sub_h", status: "paid", kind: "SUBSCRIPTION", subtotalCents: 35000, totalCents: 35000, amountPaidCents: 35000, paidAt: new Date(at), periodStart: new Date(at), periodEnd: new Date(at), backfilled: true } });
-    await paid("in_oct", "2026-10-05T15:00:00Z");
-    await paid("in_nov", "2026-11-05T15:00:00Z");
+    const paid = (id: string, billed: string, at: string) => db.invoice.create({ data: { stripeInvoiceId: id, clientId: c.id, stripeSubscriptionId: "sub_h", status: "paid", kind: "SUBSCRIPTION", subtotalCents: 35000, totalCents: 35000, amountPaidCents: 35000, billedAt: new Date(billed), paidAt: new Date(at), periodStart: new Date(at), periodEnd: new Date(at), backfilled: true } });
+    await paid("in_oct", "2026-10-05T15:00:00Z", "2026-10-05T15:00:00Z");
+    // October's bill paid late, in November: October's commission was already paid by hand.
+    await paid("in_oct_late", "2026-10-24T15:00:00Z", "2026-11-04T15:00:00Z");
+    await paid("in_nov", "2026-11-05T15:00:00Z", "2026-11-05T15:00:00Z");
 
     const csv = "client,executive_1,rate_1,months_already_earned\ncus_h,ExecA,10%,3\n";
     const plan = await planImport(csv, { createMissingExecutives: true, settledThrough: "2026-11-01" });
@@ -48,6 +50,7 @@ describe("commission import after 'Load invoice history'", () => {
     await applyImport(plan.ready);
 
     expect((await db.invoice.findUniqueOrThrow({ where: { stripeInvoiceId: "in_oct" } })).backfilled).toBe(true);
+    expect((await db.invoice.findUniqueOrThrow({ where: { stripeInvoiceId: "in_oct_late" } })).backfilled).toBe(true);
     expect((await db.invoice.findUniqueOrThrow({ where: { stripeInvoiceId: "in_nov" } })).backfilled).toBe(false);
     const lines = await db.commissionEntry.findMany();
     expect(lines.map((l) => [l.month, l.windowIndex, l.amountCents])).toEqual([["2026-11", 4, 3500]]);

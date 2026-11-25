@@ -83,3 +83,16 @@ describe("monthly commission breakdown", () => {
     await expect(monthlyBreakdown("2026-10", now)).rejects.toThrow();
   });
 });
+
+describe("final payout month", () => {
+  it("two bills paid in one month show the same final month, from the later payout", async () => {
+    sessionRef.current = { user: { id: "u1", email: "u@x.co", name: "U", role: "OWNER", totpEnabled: true }, twoFactorVerified: true };
+    const c = await client("Two Bills", ess, "sub_t");
+    for (const [i, day] of [[3, "04"], [4, "24"]] as const) {
+      const inv = await paidInvoice(c.id, "sub_t", 20000, new Date(`2026-11-${day}T15:00:00Z`));
+      await db.commissionEntry.create({ data: { executiveId: albert, clientId: c.id, invoiceId: inv.id, kind: "EARNED", windowIndex: i, baseCents: 20000, rateBp: 1000, amountCents: 2000, occurredAt: inv.paidAt!, month: "2026-11" } });
+    }
+    const rows = (await monthlyBreakdown("2026-11", now)).find((x) => x.executiveName === "Exec A")!.groups.flatMap((g) => g.rows);
+    expect(rows.map((r) => [r.payout, r.finalMonth])).toEqual([["3 of 12", "2027-07"], ["4 of 12", "2027-07"]]);
+  });
+});
