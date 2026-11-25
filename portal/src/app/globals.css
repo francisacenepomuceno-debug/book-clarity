@@ -195,3 +195,8 @@ header.sidebar ~ main { margin-left: 232px; max-width: none; padding: 24px 32px;
 .exec-breakdown tr.group-row th { background: var(--soft, #f1f4f9); text-transform: none; font-size: 13px; color: inherit; }
 .exec-breakdown tr.expected td { color: var(--muted); font-style: italic; }
 .exec-breakdown tfoot th { border-top: 2px solid var(--line); text-transform: none; font-size: 13px; color: inherit; }
+
+/* Dashboard: client search */
+.client-search { display: flex; align-items: center; gap: 12px; margin: 18px 0 10px; flex-wrap: wrap; }
+.client-search input { flex: 1 1 320px; max-width: 520px; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.client-search input:focus { outline: 2px solid var(--brand, #1f2a7c); outline-offset: 1px; }

@@ -1,3 +1,4 @@
+import { ClientSearch } from "./ClientSearch";
 import { getLiveSnapshot } from "@/stripe/liveSnapshot";
 import { STATUS_LABEL, type ClientStatus } from "@/domain/clientStatus";
 import { formatUsd } from "@/lib/money";
@@ -144,8 +145,9 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
         {owner && <OwnerPanels />}
 
+        <ClientSearch tableId="client-table" />
         <section className="panel">
-          <table>
+          <table id="client-table">
             <thead>
               <tr>
                 <th>Client</th>
@@ -163,7 +165,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
             </thead>
             <tbody>
               {shown.map((r) => (
-                <tr key={r.subscriptionId}>
+                <tr key={r.subscriptionId} data-search={[r.name, r.email ?? "", r.packageName ?? ""].join(" ").toLowerCase()}>
                   <td>
                     <a href={`/clients/${r.subscriptionId}`}>{r.name}</a>
                     {r.email && <div className="muted">{r.email}</div>}
