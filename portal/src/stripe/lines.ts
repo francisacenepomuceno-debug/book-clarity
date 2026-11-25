@@ -26,3 +26,8 @@ export function subscriptionIdOf(inv: Stripe.Invoice): string | null {
 
 export const idOf = (x: string | { id: string } | null | undefined): string | null =>
   !x ? null : typeof x === "string" ? x : x.id;
+
+/** A line's amount after its share of any discount (a 20% coupon also reduces the card-fee line). */
+export function netLineAmount(line: Pick<Stripe.InvoiceLineItem, "amount"> & { discount_amounts?: { amount: number }[] | null }): number {
+  return line.amount - (line.discount_amounts ?? []).reduce((n, d) => n + d.amount, 0);
+}

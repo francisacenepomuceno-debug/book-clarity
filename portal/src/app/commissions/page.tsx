@@ -8,10 +8,11 @@ import { fmtDate, fmtMonth, todayInTz } from "@/lib/format";
 import { STATUS_LABEL } from "@/domain/clientStatus";
 import { PortalHeader } from "@/app/PortalHeader";
 import { AddExecutiveForm, MarkPaidForm } from "./Forms";
+import { MonthlyBreakdown } from "./MonthlyBreakdown";
 
 export const dynamic = "force-dynamic";
 
-export default async function CommissionsPage() {
+export default async function CommissionsPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const viewer = await requirePermission("commissions.view");
   const canPay = can(viewer.role, "commissions.markPaid");
   const [statements, unassigned, executives] = await Promise.all([
@@ -21,6 +22,8 @@ export default async function CommissionsPage() {
   ]);
   const thisMonth = monthOf(new Date(), process.env.BUSINESS_TZ ?? "America/New_York");
   const today = todayInTz();
+  const asked = (await searchParams).month;
+  const breakdownMonth = asked && /^\d{4}-\d{2}$/.test(asked) ? asked : thisMonth;
   const unpaidTotal = statements.filter((s) => s.status === "OPEN").reduce((n, s) => n + s.totalCents, 0);
 
   return (
@@ -56,6 +59,8 @@ export default async function CommissionsPage() {
             </tbody>
           </table>
         </section>
+
+        <MonthlyBreakdown month={breakdownMonth} thisMonth={thisMonth} />
 
         <div className="two-col">
           <section className="panel pad">

@@ -184,3 +184,14 @@ header.sidebar ~ main { margin-left: 232px; max-width: none; padding: 24px 32px;
   .side-toggle:checked ~ .side-panel { display: flex; }
   header.sidebar ~ main { margin-left: 0; padding: 16px; }
 }
+
+/* Commissions: monthly breakdown per executive */
+.breakdown-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.breakdown-head .inline-form { align-items: center; margin: 0; }
+.exec-breakdown { margin-top: 22px; }
+.exec-breakdown h4 { margin: 0 0 8px; font-size: 16px; }
+.table-scroll { overflow-x: auto; }
+.exec-breakdown table { min-width: 860px; }
+.exec-breakdown tr.group-row th { background: var(--soft, #f1f4f9); text-transform: none; font-size: 13px; color: inherit; }
+.exec-breakdown tr.expected td { color: var(--muted); font-style: italic; }
+.exec-breakdown tfoot th { border-top: 2px solid var(--line); text-transform: none; font-size: 13px; color: inherit; }
