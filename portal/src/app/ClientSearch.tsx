@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-/** Filters the dashboard's client table as you type (name, email, package). Rows carry a data-search attribute. */
+/** Filters the dashboard's client tables as you type (name, email, package). Rows carry a data-search attribute. */
 export function ClientSearch({ tableId }: { tableId: string }) {
   const [q, setQ] = useState("");
   const [shown, setShown] = useState<number | null>(null);
@@ -16,6 +16,16 @@ export function ClientSearch({ tableId }: { tableId: string }) {
       const hit = words.every((w) => (tr.dataset.search ?? "").includes(w));
       tr.hidden = !hit;
       if (hit) n++;
+    });
+    // Grouped tables (one per status): hide a group with no matches and show "x of y" in its heading.
+    document.querySelectorAll<HTMLElement>(`#${tableId} [data-group]`).forEach((g) => {
+      const visible = g.querySelectorAll("tbody tr[data-search]:not([hidden])").length;
+      g.hidden = words.length > 0 && visible === 0;
+      const count = g.querySelector<HTMLElement>(".group-count");
+      if (count) {
+        const total = Number(count.dataset.total ?? 0);
+        count.textContent = words.length ? `${visible} of ${total}` : `${total} client${total === 1 ? "" : "s"}`;
+      }
     });
     setShown(words.length ? n : null);
   }, [q, tableId]);
