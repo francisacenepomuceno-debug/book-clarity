@@ -209,3 +209,8 @@ header.sidebar ~ main { margin-left: 232px; max-width: none; padding: 24px 32px;
 /* Commissions: executive list with merge */
 .exec-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
 .exec-row .row-form select { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; }
+.password-field { position: relative; display: block; }
+.password-field input { width: 100%; box-sizing: border-box; padding-right: 40px; }
+.password-field button.password-toggle { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted, #667); cursor: pointer; }
+.password-field button.password-toggle:hover { color: var(--ink, #1f2a7c); background: rgba(0, 0, 0, 0.05); }
+.password-toggle:focus-visible { outline: 2px solid var(--brand, #1f2a7c); outline-offset: 1px; }
