@@ -28,11 +28,11 @@ export function ImportForm() {
           <h3>Ready to apply ({s.ready.length})</h3>
           {s.ready.length > 0 && (
             <table>
-              <thead><tr><th>Line</th><th>Client</th><th>Type</th><th>Commission</th><th>Months already earned</th><th>ACE slot</th><th>Commission Apply will post now</th></tr></thead>
+              <thead><tr><th>Line</th><th>Client</th><th>Company</th><th>Type</th><th>Commission</th><th>Months already earned</th><th>ACE slot</th><th>Commission Apply will post now</th></tr></thead>
               <tbody>
                 {s.ready.map((r) => (
                   <tr key={r.line}>
-                    <td>{r.line}</td><td>{r.clientName}{r.create && <><br /><span className="muted">new client</span></>}</td><td>{r.type ?? "unchanged"}</td>
+                    <td>{r.line}</td><td>{r.clientName}{r.create && <><br /><span className="muted">new client</span></>}</td><td>{r.companyName ?? <span className="muted">unchanged</span>}</td><td>{r.type ?? "unchanged"}</td>
                     <td>{r.shares.map((x) => `${x.executiveName} ${x.ratePercent}%`).join(" + ") || "unchanged"}{r.newExecutives.length ? ` (new: ${r.newExecutives.join(", ")})` : ""}</td>
                     <td>{r.monthsBeforePortal ?? "unchanged"}</td>
                     <td>{r.ace ? `from ${r.ace.startOn}${r.ace.historical ? " (historical)" : ""}` : "—"}</td>

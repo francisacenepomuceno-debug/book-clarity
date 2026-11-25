@@ -51,8 +51,9 @@ export default async function ClientPage({ params }: { params: Promise<{ subscri
       <PortalHeader role={viewer.role} viewerName={viewer.name} />
       <main>
         <p><a href="/">← All clients</a></p>
-        <h2 style={{ marginBottom: 4 }}>{r.name}</h2>
+        <h2 style={{ marginBottom: 4 }}>{r.companyName || r.name}</h2>
         <p className="muted" style={{ marginTop: 0 }}>
+          {r.companyName && <>Contact: <strong>{r.name}</strong> · </>}
           <span className={`badge s-${r.status}`}>{STATUS_LABEL[r.status]}</span> · {r.packageName}
           {r.sixMonthContract && " · 6-month contract"} · next charge {fmtDate(r.nextChargeDate)}
           {r.email && <> · {r.email}</>}
@@ -89,10 +90,10 @@ export default async function ClientPage({ params }: { params: Promise<{ subscri
                 <h3>Company</h3>
                 {sameAccount.length > 0 && (
                   <p className="muted">
-                    Shares a Stripe account with: {sameAccount.map((c, i) => <span key={c.id}>{i > 0 && ", "}<a href={`/clients/${c.stripeSubscriptionId ?? c.id}`}>{c.name}</a></span>)}. Each company has its own packages and commission.
+                    Shares a Stripe account with: {sameAccount.map((c, i) => <span key={c.id}>{i > 0 && ", "}<a href={`/clients/${c.stripeSubscriptionId ?? c.id}`}>{c.companyName || c.name}</a></span>)}. Each company has its own packages and commission.
                   </p>
                 )}
-                <RenameCompanyForm clientId={client.id} subscriptionId={subscriptionId} name={client.name} />
+                <RenameCompanyForm clientId={client.id} subscriptionId={subscriptionId} name={client.companyName ?? ""} contact={client.name} />
                 {otherSubs.length > 0 && <SeparateCompanyForm subscriptionId={subscriptionId} packageLabel={r.packageName} />}
               </section>
             )}

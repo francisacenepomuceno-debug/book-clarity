@@ -3,14 +3,14 @@
 import { useActionState } from "react";
 import { renameClientAction, separateCompanyAction, type CompanyFormState } from "./company-actions";
 
-export function RenameCompanyForm(p: { clientId: string; subscriptionId: string; name: string }) {
+export function RenameCompanyForm(p: { clientId: string; subscriptionId: string; name: string; contact: string }) {
   const [s, action, pending] = useActionState<CompanyFormState, FormData>(renameClientAction, {});
   return (
     <form action={action} className="inline-form">
       <input type="hidden" name="clientId" value={p.clientId} />
       <input type="hidden" name="subscriptionId" value={p.subscriptionId} />
-      <label className="grow">Company name<input name="name" defaultValue={p.name} required /></label>
-      <button className="secondary" disabled={pending}>Rename</button>
+      <label className="grow">Company name <span className="muted" style={{ fontWeight: 400 }}>(contact: {p.contact}, from Stripe)</span><input name="name" defaultValue={p.name} placeholder="e.g. Hispanic Plug" /></label>
+      <button className="secondary" disabled={pending}>Save company name</button>
       {s.ok && <p className="form-ok">Saved.</p>}
       {s.error && <p className="form-error">{s.error}</p>}
     </form>

@@ -97,7 +97,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const count = (s: ClientStatus) => rows.filter((r) => r.status === s).length;
   const billing = rows.filter((r) => r.status !== "PAUSED" && r.status !== "ENDED");
   const shown = (status === "ALL" ? rows : rows.filter((r) => r.status === status)).sort(
-    (a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status) || a.name.localeCompare(b.name),
+    (a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status) || (a.companyName || a.name).localeCompare(b.companyName || b.name),
   );
 
   return (
@@ -158,7 +158,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                   <table>
                     <thead>
                   <tr>
-                    <th>Client</th>
+                    <th>Company</th>
+                    <th>Contact</th>
                     <th>Status</th>
                     <th>Type</th>
                     <th>Package</th>
@@ -173,9 +174,12 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 </thead>
                     <tbody>
                       {group.map((r) => (
-                        <tr key={r.subscriptionId} data-search={[r.name, r.email ?? "", r.packageName ?? ""].join(" ").toLowerCase()}>
+                        <tr key={r.subscriptionId} data-search={[r.companyName ?? "", r.name, r.email ?? "", r.packageName ?? ""].join(" ").toLowerCase()}>
                           <td>
-                            <a href={`/clients/${r.subscriptionId}`}>{r.name}</a>
+                            {r.companyName ? <a href={`/clients/${r.subscriptionId}`}><strong>{r.companyName}</strong></a> : <a href={`/clients/${r.subscriptionId}#company`} className="muted">Add company</a>}
+                          </td>
+                          <td>
+                            {r.companyName ? r.name : <a href={`/clients/${r.subscriptionId}`}>{r.name}</a>}
                             {r.email && <div className="muted">{r.email}</div>}
                           </td>
                           <td><span className={`badge s-${r.status}`}>{STATUS_LABEL[r.status]}</span></td>

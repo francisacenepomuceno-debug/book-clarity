@@ -46,7 +46,9 @@ export async function separateCompany(subscriptionId: string, companyName: strin
     }
     const c = await tx.client.create({
       data: {
-        name,
+        // Same contact person (Stripe's customer); the company is the one named here.
+        name: from.name,
+        companyName: name,
         email: from.email,
         phone: from.phone,
         billingState: from.billingState,
@@ -83,7 +85,7 @@ export async function separateCompany(subscriptionId: string, companyName: strin
   return { ok: true, clientId: created.client.id };
 }
 
-/** Owners / Super Admin: rename a client (company). Kept even when Stripe's customer name differs. */
+/** Owners / Super Admin: set a client's company name (the contact's name stays Stripe's customer name). */
 export async function renameClient(clientId: string, name: string): Promise<ActionResult> {
   let actor;
   try {
@@ -93,11 +95,12 @@ export async function renameClient(clientId: string, name: string): Promise<Acti
     throw e;
   }
   const n = name.trim().replace(/\s+/g, " ");
-  if (!n) return { ok: false, error: "Enter a name." };
   const c = await db.client.findUnique({ where: { id: clientId } });
   if (!c) return { ok: false, error: "Client not found." };
-  if (c.name === n) return { ok: true };
-  await db.client.update({ where: { id: clientId }, data: { name: n } });
-  await writeAudit({ actorId: actor.id, action: "client_renamed", entity: "Client", entityId: clientId, before: { name: c.name }, after: { name: n } });
+  // Empty clears it (the dashboard then shows "—").
+  const company = n || null;
+  if (c.companyName === company) return { ok: true };
+  await db.client.update({ where: { id: clientId }, data: { companyName: company } });
+  await writeAudit({ actorId: actor.id, action: "client_company_renamed", entity: "Client", entityId: clientId, before: { companyName: c.companyName }, after: { companyName: company } });
   return { ok: true };
 }

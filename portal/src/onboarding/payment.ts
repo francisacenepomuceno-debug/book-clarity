@@ -241,7 +241,7 @@ export async function onOnboardingFeeFailed(inv: Stripe.Invoice): Promise<void> 
       key: `onboarding-fee-failed-staff:${inv.id}:${u.id}`,
       kind: "onboarding-fee-failed-staff",
       to: { name: u.name, email: u.email },
-      email: { subject: `${o.client.name}'s onboarding fee didn't go through`, html: `<p>${o.client.name}'s onboarding fee of ${amount} failed (a bank payment can bounce days later). They've been asked to pay again from their onboarding link; monthly billing won't start until they do.</p>` },
+      email: { subject: `${o.client.companyName || o.client.name}'s onboarding fee didn't go through`, html: `<p>${o.client.companyName || o.client.name}'s onboarding fee of ${amount} failed (a bank payment can bounce days later). They've been asked to pay again from their onboarding link; monthly billing won't start until they do.</p>` },
     });
   }
 }
