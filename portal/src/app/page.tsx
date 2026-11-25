@@ -145,67 +145,75 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
         {owner && <OwnerPanels />}
 
-        <ClientSearch tableId="client-table" />
-        <section className="panel">
-          <table id="client-table">
-            <thead>
-              <tr>
-                <th>Client</th>
-                <th>Status</th>
-                <th>Type</th>
-                <th>Package</th>
-                {money && <th className="num">Monthly</th>}
-                {money && <th>Discounted</th>}
-                {money && <th className="num">Card fee</th>}
-                {money && <th>Payment method</th>}
-                <th>Next charge</th>
-                {money && <th className="num">Amount due</th>}
-                <th>Past due since</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((r) => (
-                <tr key={r.subscriptionId} data-search={[r.name, r.email ?? "", r.packageName ?? ""].join(" ").toLowerCase()}>
-                  <td>
-                    <a href={`/clients/${r.subscriptionId}`}>{r.name}</a>
-                    {r.email && <div className="muted">{r.email}</div>}
-                  </td>
-                  <td><span className={`badge s-${r.status}`}>{STATUS_LABEL[r.status]}</span></td>
-                  <td>{r.clientType === "ACE" ? "ACE" : "Direct"}</td>
-                  <td>
-                    {r.packageName}
-                    {r.sixMonthContract && <span className="muted"> · 6-month</span>}
-                  </td>
-                  {money && <td className="num">{formatUsd(r.packageMonthlyCents ?? 0)}</td>}
-                  {money && (
-                    <td>
-                      {r.discounted ? (
-                        <>
-                          <strong className="discounted">Yes</strong>
-                          {r.listPriceCents && (r.packageMonthlyCents ?? 0) < r.listPriceCents && <span className="muted"> · list {formatUsd(r.listPriceCents)}</span>}
-                          {r.hasDiscount && <span className="muted"> · coupon</span>}
-                          {canRevert && <> · <a href={`/clients/${r.subscriptionId}#price`}>Revert</a></>}
-                        </>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-                  )}
-                  {money && <td className="num">{r.cardFeeMonthlyCents ? formatUsd(r.cardFeeMonthlyCents) : "—"}</td>}
-                  {money && <td>{r.paymentMethod}</td>}
-                  <td>{fmtDate(r.nextChargeDate)}</td>
-                  {money && <td className="num">{r.amountDueCents ? formatUsd(r.amountDueCents) : "—"}</td>}
-                  <td>{fmtDate(r.pastDueSince)}</td>
-                </tr>
-              ))}
-              {shown.length === 0 && (
-                <tr>
-                  <td colSpan={money ? 11 : 6} className="muted">No clients in this group.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </section>
+        <ClientSearch tableId="client-tables" />
+        <div id="client-tables">
+          {[...ORDER, ...new Set(shown.map((r) => r.status).filter((s) => !ORDER.includes(s)))].filter((s) => shown.some((r) => r.status === s)).map((s) => {
+            const group = shown.filter((r) => r.status === s);
+            return (
+              <section className="panel status-group" key={s} data-group={s}>
+                <h3 className="status-group-head">
+                  <span className={`badge s-${s}`}>{STATUS_LABEL[s]}</span> <span className="muted group-count" data-total={group.length}>{group.length} client{group.length === 1 ? "" : "s"}</span>
+                </h3>
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Status</th>
+                    <th>Type</th>
+                    <th>Package</th>
+                    {money && <th className="num">Monthly</th>}
+                    {money && <th>Discounted</th>}
+                    {money && <th className="num">Card fee</th>}
+                    {money && <th>Payment method</th>}
+                    <th>Next charge</th>
+                    {money && <th className="num">Amount due</th>}
+                    <th>Past due since</th>
+                  </tr>
+                </thead>
+                    <tbody>
+                      {group.map((r) => (
+                        <tr key={r.subscriptionId} data-search={[r.name, r.email ?? "", r.packageName ?? ""].join(" ").toLowerCase()}>
+                          <td>
+                            <a href={`/clients/${r.subscriptionId}`}>{r.name}</a>
+                            {r.email && <div className="muted">{r.email}</div>}
+                          </td>
+                          <td><span className={`badge s-${r.status}`}>{STATUS_LABEL[r.status]}</span></td>
+                          <td>{r.clientType === "ACE" ? "ACE" : "Direct"}</td>
+                          <td>
+                            {r.packageName}
+                            {r.sixMonthContract && <span className="muted"> · 6-month</span>}
+                          </td>
+                          {money && <td className="num">{formatUsd(r.packageMonthlyCents ?? 0)}</td>}
+                          {money && (
+                            <td>
+                              {r.discounted ? (
+                                <>
+                                  <strong className="discounted">Yes</strong>
+                                  {r.listPriceCents && (r.packageMonthlyCents ?? 0) < r.listPriceCents && <span className="muted"> · list {formatUsd(r.listPriceCents)}</span>}
+                                  {r.hasDiscount && <span className="muted"> · coupon</span>}
+                                  {canRevert && <> · <a href={`/clients/${r.subscriptionId}#price`}>Revert</a></>}
+                                </>
+                              ) : (
+                                <span className="muted">—</span>
+                              )}
+                            </td>
+                          )}
+                          {money && <td className="num">{r.cardFeeMonthlyCents ? formatUsd(r.cardFeeMonthlyCents) : "—"}</td>}
+                          {money && <td>{r.paymentMethod}</td>}
+                          <td>{fmtDate(r.nextChargeDate)}</td>
+                          {money && <td className="num">{r.amountDueCents ? formatUsd(r.amountDueCents) : "—"}</td>}
+                          <td>{fmtDate(r.pastDueSince)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            );
+          })}
+          {shown.length === 0 && <section className="panel pad"><p className="muted">No clients in this group.</p></section>}
+        </div>
         <p className="note">
           Live from Stripe (read-only). Monthly = list price of package items before discounts. Direct vs ACE and commission
           owners appear after the commission spreadsheet is imported.

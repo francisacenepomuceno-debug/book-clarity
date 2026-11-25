@@ -200,3 +200,8 @@ header.sidebar ~ main { margin-left: 232px; max-width: none; padding: 24px 32px;
 .client-search { display: flex; align-items: center; gap: 12px; margin: 18px 0 10px; flex-wrap: wrap; }
 .client-search input { flex: 1 1 320px; max-width: 520px; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 .client-search input:focus { outline: 2px solid var(--brand, #1f2a7c); outline-offset: 1px; }
+
+/* Dashboard: one table per status */
+.status-group { margin-bottom: 18px; }
+.status-group-head { display: flex; align-items: center; gap: 10px; margin: 0; padding: 14px 16px 10px; font-size: 15px; }
+.status-group-head .badge { font-size: 13px; }
