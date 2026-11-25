@@ -32,6 +32,42 @@ export async function addExecutive(name: string): Promise<ActionResult<{ executi
 }
 
 /**
+ * Owners: merges a duplicate executive into another (e.g. "Albert" into "Albert Assad"). Their commission splits,
+ * ledger lines and statements move over, then the duplicate is removed. A line both already have is kept once.
+ */
+export async function mergeExecutive(fromId: string, intoId: string): Promise<ActionResult> {
+  const actor = await owner();
+  if (!actor) return FORBIDDEN;
+  if (!fromId || !intoId || fromId === intoId) return { ok: false, error: "Choose a different executive to merge into." };
+  const [from, into] = await Promise.all([db.executive.findUnique({ where: { id: fromId } }), db.executive.findUnique({ where: { id: intoId } })]);
+  if (!from || !into) return { ok: false, error: "Executive not found. Refresh and try again." };
+  const moved = await db.$transaction(async (tx) => {
+    const shares = await tx.commissionShare.updateMany({ where: { executiveId: fromId }, data: { executiveId: intoId } });
+    let lines = 0;
+    for (const e of await tx.commissionEntry.findMany({ where: { executiveId: fromId } })) {
+      const dup = await tx.commissionEntry.findFirst({ where: { executiveId: intoId, invoiceId: e.invoiceId, kind: e.kind, refundKey: e.refundKey } });
+      if (dup) await tx.commissionEntry.delete({ where: { id: e.id } });
+      else { await tx.commissionEntry.update({ where: { id: e.id }, data: { executiveId: intoId } }); lines++; }
+    }
+    for (const s of await tx.commissionStatement.findMany({ where: { executiveId: fromId } })) {
+      const other = await tx.commissionStatement.findUnique({ where: { executiveId_month: { executiveId: intoId, month: s.month } } });
+      if (!other) await tx.commissionStatement.update({ where: { id: s.id }, data: { executiveId: intoId } });
+      else {
+        // Both had a statement for the month: one stays; it counts as paid if either was paid.
+        if (s.status === "PAID" && other.status !== "PAID") {
+          await tx.commissionStatement.update({ where: { id: other.id }, data: { status: "PAID", paidAt: s.paidAt, paidById: s.paidById, totalCents: (other.totalCents ?? 0) + (s.totalCents ?? 0) } });
+        }
+        await tx.commissionStatement.delete({ where: { id: s.id } });
+      }
+    }
+    await tx.executive.delete({ where: { id: fromId } });
+    return { shares: shares.count, lines };
+  });
+  await writeAudit({ actorId: actor.id, action: "executive_merged", entity: "Executive", entityId: intoId, before: { name: from.name, id: fromId }, after: { into: into.name, ...moved } });
+  return { ok: true };
+}
+
+/**
  * Sets who earns commission on a client from a date forward (a new split version; old versions are kept),
  * optionally records paid months already earned before the portal, then records any commission now due.
  */

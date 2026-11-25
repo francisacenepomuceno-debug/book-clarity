@@ -7,7 +7,7 @@ import { formatUsd } from "@/lib/money";
 import { fmtDate, fmtMonth, todayInTz } from "@/lib/format";
 import { STATUS_LABEL } from "@/domain/clientStatus";
 import { PortalHeader } from "@/app/PortalHeader";
-import { AddExecutiveForm, MarkPaidForm } from "./Forms";
+import { AddExecutiveForm, MarkPaidForm, MergeExecutiveForm } from "./Forms";
 import { MonthlyBreakdown } from "./MonthlyBreakdown";
 
 export const dynamic = "force-dynamic";
@@ -81,7 +81,12 @@ export default async function CommissionsPage({ searchParams }: { searchParams: 
           <section className="panel pad">
             <h3>Executives</h3>
             <ul className="plain">
-              {executives.map((e) => <li key={e.id}>{e.name}{!e.active && <span className="muted"> (inactive)</span>}</li>)}
+              {executives.map((e) => (
+                <li key={e.id} className="exec-row">
+                  <span>{e.name}{!e.active && <span className="muted"> (inactive)</span>}</span>
+                  {canPay && <MergeExecutiveForm from={{ id: e.id, name: e.name }} others={executives.filter((o) => o.id !== e.id).map((o) => ({ id: o.id, name: o.name }))} />}
+                </li>
+              ))}
               {executives.length === 0 && <li className="muted">None yet. Add Jose and Albert.</li>}
             </ul>
             {canPay && <AddExecutiveForm />}

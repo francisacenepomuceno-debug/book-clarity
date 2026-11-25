@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { addExecutiveAction, markPaidAction, setCommissionAction, setPackageMonthsAction, type FormResult } from "./actions";
+import { addExecutiveAction, mergeExecutiveAction, markPaidAction, setCommissionAction, setPackageMonthsAction, type FormResult } from "./actions";
 
 export function AddExecutiveForm() {
   const [s, action, pending] = useActionState<FormResult, FormData>(addExecutiveAction, {});
@@ -82,6 +82,30 @@ export function PackageMonthsForm(p: { subscriptionId: string; pageKey: string; 
       <label className="muted">Months earned before the portal <input type="number" name="months" min={0} max={12} step={1} defaultValue={p.months} style={{ width: 70 }} /></label>
       <button className="secondary" disabled={pending}>Save</button>
       {s.ok && <span className="form-ok">Saved.</span>}
+      {s.error && <span className="form-error">{s.error}</span>}
+    </form>
+  );
+}
+
+/** Owners: merge a duplicate executive (e.g. one the import created) into another. */
+export function MergeExecutiveForm(p: { from: { id: string; name: string }; others: { id: string; name: string }[] }) {
+  const [s, action, pending] = useActionState<FormResult, FormData>(mergeExecutiveAction, {});
+  if (p.others.length === 0) return null;
+  return (
+    <form
+      action={action}
+      className="row-form"
+      onSubmit={(e) => {
+        const into = (e.currentTarget.elements.namedItem("intoId") as HTMLSelectElement).selectedOptions[0]?.text;
+        if (!window.confirm(`Merge "${p.from.name}" into "${into}"? Their commission splits, lines and statements move to ${into}, and "${p.from.name}" is removed.`)) e.preventDefault();
+      }}
+    >
+      <input type="hidden" name="fromId" value={p.from.id} />
+      <select name="intoId" aria-label={`Merge ${p.from.name} into`} defaultValue="">
+        <option value="" disabled>Merge into…</option>
+        {p.others.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+      </select>
+      <button className="secondary" disabled={pending}>Merge</button>
       {s.error && <span className="form-error">{s.error}</span>}
     </form>
   );
