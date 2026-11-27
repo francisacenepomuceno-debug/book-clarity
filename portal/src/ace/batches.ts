@@ -76,11 +76,18 @@ export async function createBatch(i: {
   alreadyPaid?: { paidOn: string; method: "check" | "bank_transfer" | "ach" | "card"; reference: string };
   /** Bought before the portal: commission was settled outside it, so no months 1–6 lump sum is posted. */
   historical?: boolean;
+  /** Commission on the whole purchase: this executive earns rateBp of each slot (less onboarding) when ACE pays. */
+  commission?: { executiveId: string; rateBp: number };
 }): Promise<ActionResult<{ batchId: string }>> {
   const actor = await aceManager();
   if (!actor) return FORBIDDEN;
   if (i.historical && !i.alreadyPaid) return { ok: false, error: "A historical batch must be marked as already paid outside the portal." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(i.purchasedOn)) return { ok: false, error: "Pick the purchase date." };
+  if (i.commission) {
+    if (i.historical) return { ok: false, error: "A historical batch's commission was settled outside the portal: leave the commission executive empty." };
+    if (!Number.isInteger(i.commission.rateBp) || i.commission.rateBp < 1 || i.commission.rateBp > 10000) return { ok: false, error: "Enter a commission rate between 0.01% and 100%." };
+    if (!(await db.executive.findUnique({ where: { id: i.commission.executiveId } }))) return { ok: false, error: "Pick the executive who earns the commission." };
+  }
   if (i.lines.length === 0 || i.lines.some((l) => !Number.isInteger(l.quantity) || l.quantity < 1 || !Number.isInteger(l.unitPriceCents) || l.unitPriceCents < 1)) {
     return { ok: false, error: "Each line needs a quantity of at least 1 and a price per slot." };
   }
@@ -97,6 +104,8 @@ export async function createBatch(i: {
         totalCents: batchTotals(i.lines),
         createdById: actor.id,
         historical: !!i.historical,
+        commissionExecutiveId: i.commission?.executiveId ?? null,
+        commissionRateBp: i.commission?.rateBp ?? null,
         ...(i.alreadyPaid
           ? {
               paidAt: startOfDayIn(i.alreadyPaid.paidOn, tz()),
@@ -116,7 +125,9 @@ export async function createBatch(i: {
     const issued = await issue(batch.id);
     if (!issued.ok) return issued;
   }
-  await writeAudit({ actorId: actor.id, action: "ace_batch_created", entity: "AceBatch", entityId: batch.id, after: { lines: i.lines, totalCents: batch.totalCents, alreadyPaid: !!i.alreadyPaid, historical: !!i.historical } });
+  await writeAudit({ actorId: actor.id, action: "ace_batch_created", entity: "AceBatch", entityId: batch.id, after: { lines: i.lines, totalCents: batch.totalCents, alreadyPaid: !!i.alreadyPaid, historical: !!i.historical, commission: i.commission ?? null } });
+  // Already paid with a commission executive: the batch commission posts now.
+  if (i.alreadyPaid && i.commission && !i.historical) await postAceCommissionsForBatch(batch.id);
   return { ok: true, batchId: batch.id };
 }
 
@@ -251,6 +262,7 @@ export type BatchSummary = {
   stripeInvoiceId: string | null;
   invoiceSentAt: Date | null;
   historical: boolean;
+  commission: { executiveName: string; rateBp: number } | null;
   packages: { packageId: string; name: string; quantity: number; unitPriceCents: number; used: number; open: number }[];
 };
 
@@ -261,9 +273,14 @@ async function summarize(batchIds: string[]): Promise<BatchSummary[]> {
     db.aceSlot.findMany({ where: { batchId: { in: batchIds } }, select: { batchId: true, packageId: true, clientId: true } }),
     db.package.findMany(),
   ]);
+  const execs = await db.executive.findMany({ where: { id: { in: batches.map((b) => b.commissionExecutiveId).filter((x): x is string => !!x) } } });
   const name = new Map(packages.map((p) => [p.id, p.name]));
   return batches.map((b) => ({
     ...b,
+    commission:
+      b.commissionExecutiveId && b.commissionRateBp
+        ? { executiveName: execs.find((e) => e.id === b.commissionExecutiveId)?.name ?? "(removed executive)", rateBp: b.commissionRateBp }
+        : null,
     packages: lines
       .filter((l) => l.batchId === b.id)
       .map((l) => {
