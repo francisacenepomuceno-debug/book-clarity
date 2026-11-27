@@ -7,7 +7,7 @@ import { formatUsd } from "@/lib/money";
 import { fmtDate, todayInTz } from "@/lib/format";
 import { STATUS_LABEL } from "@/domain/clientStatus";
 import { PortalHeader } from "@/app/PortalHeader";
-import { AssignSlotForm, CardPayLinkForm, RecordPaymentForm, ResendInvoiceForm } from "../Forms";
+import { AssignSlotForm, CardPayLinkForm, DeleteBatchForm, RecordPaymentForm, ResendInvoiceForm } from "../Forms";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +39,13 @@ export default async function BatchPage({ params }: { params: Promise<{ batchId:
             : batch.invoiceSentAt ? `Invoice sent to ACE ${fmtDate(batch.invoiceSentAt)}, not paid yet` : batch.stripeInvoiceId ? "Invoice not fully sent" : "Not paid yet"}
           {batch.note && ` · ${batch.note}`}
         </p>
+        {!batch.stripeInvoiceId && slots.every((x) => !x.clientId) && (
+          <section className="panel pad">
+            <h3>Entered by mistake?</h3>
+            <p className="muted">While no client is in its slots, you can delete this batch and enter it again. Any commission it posted is removed too.</p>
+            <DeleteBatchForm batchId={batchId} />
+          </section>
+        )}
         {batch.commission && (
           <p className="muted">
             <strong>Commission:</strong> {batch.commission.executiveName} earns {batch.commission.rateBp / 100}% of each slot&apos;s price less the onboarding fee, posted when ACE pays, whether or not the slot has a client.
