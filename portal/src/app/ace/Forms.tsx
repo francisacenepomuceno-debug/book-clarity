@@ -52,9 +52,10 @@ export function AceCustomerForm({ current }: { current: string }) {
   );
 }
 
-export function NewBatchForm({ packages, today }: { packages: Pkg[]; today: string }) {
+export function NewBatchForm({ packages, today, executives }: { packages: Pkg[]; today: string; executives: { id: string; name: string }[] }) {
   const [s, action, pending] = useActionState<AceFormResult, FormData>(createBatchAction, {});
   const [paid, setPaid] = useState(false);
+  const [historical, setHistorical] = useState(false);
   return (
     <form action={action} className="stack-form">
       <div className="inline-form">
@@ -76,7 +77,7 @@ export function NewBatchForm({ packages, today }: { packages: Pkg[]; today: stri
       ))}
       <label className="check"><input type="checkbox" name="alreadyPaid" checked={paid} onChange={(e) => setPaid(e.target.checked)} /> Already paid outside the portal (no Stripe invoice)</label>
       {paid && (
-        <label className="check"><input type="checkbox" name="historical" /> Historical: bought before the portal, commission already settled (no months 1–6 commission is posted)</label>
+        <label className="check"><input type="checkbox" name="historical" checked={historical} onChange={(e) => setHistorical(e.target.checked)} /> Historical: bought before the portal, commission already settled (no months 1–6 commission is posted)</label>
       )}
       {paid && (
         <div className="inline-form">
@@ -91,6 +92,19 @@ export function NewBatchForm({ packages, today }: { packages: Pkg[]; today: stri
             </select>
           </label>
           <label className="grow">Reference<input name="reference" placeholder="Check # or transfer reference" /></label>
+        </div>
+      )}
+      {!(paid && historical) && (
+        <div className="inline-form">
+          <label>
+            Commission on this purchase
+            <select name="commissionExecutiveId" defaultValue="">
+              <option value="">— each client's owner, once placed —</option>
+              {executives.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+          </label>
+          <label>Rate (%)<input name="commissionRate" type="number" min="0.01" max="100" step="0.01" defaultValue="10" /></label>
+          <p className="muted grow">Pick an executive to pay them on the whole purchase when ACE pays: their rate × each slot&apos;s price less the onboarding fee, used or not.</p>
         </div>
       )}
       <div><button disabled={pending}>{pending ? "Saving…" : paid ? "Record batch" : "Create batch and invoice ACE"}</button></div>

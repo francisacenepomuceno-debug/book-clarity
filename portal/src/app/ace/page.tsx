@@ -1,3 +1,4 @@
+import { db } from "@/lib/db";
 import { requirePermission } from "@/auth/permissions";
 import { listBatches } from "@/ace/batches";
 import { dueForContinuation } from "@/ace/continuation";
@@ -14,11 +15,12 @@ export const dynamic = "force-dynamic";
 export default async function AcePage({ searchParams }: { searchParams: Promise<{ package?: string }> }) {
   const viewer = await requirePermission("ace.manage");
   const { package: packageFilter } = await searchParams;
-  const [batches, due, packages, overview] = await Promise.all([
+  const [batches, due, packages, overview, executives] = await Promise.all([
     listBatches(),
     dueForContinuation(),
     listPackages(),
     aceSlotOverview({ packageId: packageFilter || undefined }),
+    db.executive.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
   const today = todayInTz();
   const openSlots = batches.reduce((n, b) => n + b.packages.reduce((m, p) => m + p.open, 0), 0);
@@ -133,7 +135,7 @@ export default async function AcePage({ searchParams }: { searchParams: Promise<
           {packages.length === 0 ? (
             <p className="muted">Add your packages in <a href="/settings/packages">Packages</a> first.</p>
           ) : (
-            <NewBatchForm packages={packages.filter((p) => p.active).map((p) => ({ id: p.id, name: p.name, isCustom: p.isCustom }))} today={today} />
+            <NewBatchForm packages={packages.filter((p) => p.active).map((p) => ({ id: p.id, name: p.name, isCustom: p.isCustom }))} today={today} executives={executives} />
           )}
         </section>
       </main>

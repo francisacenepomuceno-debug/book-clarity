@@ -275,7 +275,7 @@ export async function planImport(
       ...(r.company?.trim() ? { companyName: r.company.trim().replace(/\s+/g, " ") } : {}),
       create,
       willPost,
-      aceLumpSum: !!ace && !ace.historical,
+      aceLumpSum: !!ace && !ace.historical && !batches.find((b) => b.id === ace!.batchId)?.commissionExecutiveId,
       settledThrough,
       clientId: client.id,
       clientName: client.name,

@@ -50,6 +50,9 @@ export async function createBatchAction(_: AceFormResult, f: FormData): Promise<
       ? { paidOn: str(f.get("paidOn")), method: (str(f.get("method")) || "check") as "check", reference: str(f.get("reference")) }
       : undefined,
     historical,
+    commission: str(f.get("commissionExecutiveId"))
+      ? { executiveId: str(f.get("commissionExecutiveId")), rateBp: Math.round(Number(str(f.get("commissionRate")) || "10") * 100) }
+      : undefined,
   });
   if (!r.ok) return { error: r.error };
   revalidatePath("/ace");

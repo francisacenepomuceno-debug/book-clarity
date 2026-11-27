@@ -1,3 +1,4 @@
+import { openSlotLabels } from "@/ace/slots";
 import { db } from "@/lib/db";
 import { ForbiddenError, requirePermission } from "@/auth/permissions";
 import { monthOf, packagePaidCents, splitAt, windowMonthsFor } from "@/domain/commission";
@@ -50,6 +51,7 @@ export async function statementLines(executiveId: string, month: string) {
   const clients = await db.client.findMany({ where: { id: { in: [...new Set(entries.map((e) => e.clientId))] } }, select: { id: true, name: true, companyName: true, type: true, stripeSubscriptionId: true, commissionMonthsBeforePortal: true } });
   const invoices = await db.invoice.findMany({ where: { id: { in: entries.map((e) => e.invoiceId) } }, select: { id: true, stripeInvoiceId: true, stripeSubscriptionId: true } });
   const clientName = new Map(clients.map((c) => [c.id, c.companyName ? `${c.companyName} (${c.name})` : c.name]));
+  const openSlot = await openSlotLabels(entries);
   const clientById = new Map(clients.map((c) => [c.id, c]));
   const stripeId = new Map(invoices.map((i) => [i.id, i.stripeInvoiceId]));
   const subOf = new Map(invoices.map((i) => [i.id, i.stripeSubscriptionId]));
@@ -59,7 +61,7 @@ export async function statementLines(executiveId: string, month: string) {
     return c ? commissionGroup(c, subOf.get(e.invoiceId) ?? null).windowMonths : windowMonthsFor({ type: "DIRECT" });
   };
   return entries.map((e) => ({
-    clientName: clientName.get(e.clientId) ?? "(unknown client)",
+    clientName: clientName.get(e.clientId) ?? openSlot.get(e.invoiceId) ?? "(unknown client)",
     invoiceId: stripeId.get(e.invoiceId) ?? e.invoiceId,
     kind: e.kind,
     occurredAt: e.occurredAt,

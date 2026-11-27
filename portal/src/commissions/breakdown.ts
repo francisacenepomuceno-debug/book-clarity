@@ -4,6 +4,7 @@ import { requirePermission } from "@/auth/permissions";
 import { monthOf, packagePaidCents, splitAt } from "@/domain/commission";
 import { percentOfCents } from "@/lib/money";
 import { commissionGroup } from "@/commissions/engine";
+import { openSlotLabels } from "@/ace/slots";
 
 const tz = () => process.env.BUSINESS_TZ ?? "America/New_York";
 
@@ -83,6 +84,7 @@ export async function monthlyBreakdown(month: string, now: Date = new Date()): P
   const subById = new Map(subs.map((s) => [s.stripeSubscriptionId, s]));
   const pkgName = new Map(packages.map((p) => [p.id, p.name]));
   const execName = new Map(executives.map((e) => [e.id, e.name]));
+  const openSlot = await openSlotLabels(entries);
   const sharesOf = (clientId: string) => shares.filter((s) => s.clientId === clientId);
 
   /** The package group (main or another subscription) an invoice belongs to, with its window. */
@@ -114,6 +116,26 @@ export async function monthlyBreakdown(month: string, now: Date = new Date()): P
     }
     for (const e of entries.filter((x) => x.executiveId === ex.id)) {
       const c = clientById.get(e.clientId);
+      const label = openSlot.get(e.invoiceId);
+      if (!c && label) {
+        // ACE batch commission on a slot that has no client yet.
+        rows.push({
+          packageName: `ACE: ${label.replace(/^.*: open (.*) slot$/, "$1") || "Other"}`,
+          clientName: label,
+          contactName: null,
+          href: `/ace/${e.clientId.slice("ace-batch:".length)}`,
+          payout: "ACE 1–6",
+          finalMonth: null,
+          paidCents: null,
+          paidAt: e.occurredAt,
+          method: null,
+          rateBp: e.rateBp,
+          commissionCents: e.amountCents,
+          notes: ["ACE prepaid months 1–6", "Slot not used yet"],
+          expected: false,
+        });
+        continue;
+      }
       if (!c) continue;
       const inv = invoiceById.get(e.invoiceId);
       const g = groupOf(c, inv?.stripeSubscriptionId ?? null);

@@ -357,6 +357,13 @@ model AceBatch {
    * Entered at migration: bought before the portal, commission already settled outside it.
    */
   historical       Boolean     @default(false)
+  /**
+   * Commission on the whole purchase (owner, 2026-11-27): when ACE pays, this executive earns rateBp of each slot's
+   * price less the package's onboarding fee, whether or not the slot has a client yet. Null: the older rule
+   * (each client's owner earns 6 × list price once the client is in a slot).
+   */
+  commissionExecutiveId String?
+  commissionRateBp      Int?
   createdById      String
   createdAt        DateTime    @default(now())
 }
