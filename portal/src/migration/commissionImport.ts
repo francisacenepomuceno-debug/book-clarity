@@ -4,6 +4,7 @@ import { requirePermission } from "@/auth/permissions";
 import { monthOf, packagePaidCents, startOfDayIn, validateSplit, windowMonthsFor } from "@/domain/commission";
 import { setClientCommission } from "@/commissions/splits";
 import { assignSlot } from "@/ace/slots";
+import { prepaidUntil } from "@/domain/ace";
 import { writeAudit } from "@/audit/log";
 
 /** The columns Book Clarity fills in (one row per client). Download from the import page. */
@@ -242,23 +243,30 @@ export async function planImport(
 
     let ace: ReadyRow["ace"] = null;
     if (r.ace_batch || r.ace_start_date) {
-      if (type !== "ACE" && !(type === null && client.type === "ACE")) return fail("ACE batch and start date are only for ACE clients.");
       if (!r.ace_batch || !r.ace_start_date || !isRealDate(r.ace_start_date)) return fail("ACE clients need both ace_batch and a real ace_start_date (YYYY-MM-DD).");
+      // A past ACE period (its 6 months already over) is only a record: the client can be Direct by now.
+      const ended = prepaidUntil(r.ace_start_date, TZ) <= new Date();
+      if (!ended && type !== "ACE" && !(type === null && client.type === "ACE")) return fail("ACE batch and start date are only for ACE clients.");
       if (client.aceSlotId) {
         ace = null; // already in a slot: leave it (re-running the import changes nothing)
       } else {
         const batch = batches.find((b) => norm(b.note ?? "") === norm(r.ace_batch!)) ?? batches.find((b) => b.purchasedAt.toISOString().slice(0, 10) === r.ace_batch);
         if (!batch) return fail(`No ACE batch is named "${r.ace_batch}". Use the batch's note or its purchase date.`);
-        if (!client.packageId) return fail("Link this client to a package first, so the right ACE slot can be used.");
+        if (ended && !batch.historical) return fail("This client's 6 ACE months are already over: put them in a batch marked Historical.");
+        // The slot's package: the package column (what ACE bought), else the client's package.
+        const slotPkg = r.package ? packages.find((p) => norm(p.name) === norm(r.package!)) : client.package;
+        if (r.package && !slotPkg) return fail(`No package is called "${r.package}". Use a name from the Packages page.`);
+        if (!slotPkg) return fail("Link this client to a package first, or give the package column, so the right ACE slot can be used.");
         if (!batch.historical && client.stripeSubscriptionId) {
           return fail("This client is on Stripe autopay, so ACE's prepaid months would be charged twice. Put them in a batch marked Historical, or end their Stripe subscription first.");
         }
-        const k = `${batch.id}:${client.packageId}`;
-        if (!free.get(k)) return fail(`No free ${client.package?.name ?? "package"} slot left in batch "${r.ace_batch}".`);
+        const k = `${batch.id}:${slotPkg.id}`;
+        if (!free.get(k)) return fail(`No free ${slotPkg.name} slot left in batch "${r.ace_batch}".`);
         free.set(k, free.get(k)! - 1);
-        ace = { batchId: batch.id, packageId: client.packageId, startOn: r.ace_start_date, historical: batch.historical };
+        ace = { batchId: batch.id, packageId: slotPkg.id, startOn: r.ace_start_date, historical: batch.historical };
       }
     }
+
 
     // What Apply will post now: payments already in the portal that fall inside the commission window.
     let willPost: string[] = [];
