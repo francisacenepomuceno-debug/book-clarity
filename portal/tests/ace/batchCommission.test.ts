@@ -71,3 +71,22 @@ describe("commission on the whole ACE purchase", () => {
     expect(h.ok).toBe(false);
   });
 });
+
+describe("deleting a batch entered by mistake", () => {
+  it("removes it with its commission while its slots are open; refuses once a client is in a slot", async () => {
+    const { deleteBatch } = await import("@/ace/batches");
+    const r = await createBatch({ purchasedOn: "2026-10-29", note: "Wrong", lines: lines(), alreadyPaid: { paidOn: "2026-11-01", method: "check", reference: "" }, commission: { executiveId: exec, rateBp: 1000 } });
+    const id = (r as { batchId: string }).batchId;
+    expect(await db.commissionEntry.count()).toBe(4);
+    expect(await deleteBatch(id)).toEqual({ ok: true });
+    expect(await db.aceBatch.count()).toBe(0);
+    expect(await db.aceSlot.count()).toBe(0);
+    expect(await db.commissionEntry.count()).toBe(0);
+
+    const r2 = await createBatch({ purchasedOn: "2026-10-29", lines: lines(), alreadyPaid: { paidOn: "2026-11-01", method: "check", reference: "" } });
+    const id2 = (r2 as { batchId: string }).batchId;
+    const c = await db.client.create({ data: { name: "In Slot Co", status: "ONBOARDING" } });
+    await assignSlot({ batchId: id2, packageId: ess, clientId: c.id, startOn: "2026-10-01" });
+    expect((await deleteBatch(id2)).ok).toBe(false);
+  });
+});

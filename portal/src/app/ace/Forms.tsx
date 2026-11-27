@@ -5,6 +5,7 @@ import {
   assignSlotAction,
   continueAction,
   createBatchAction,
+  deleteBatchAction,
   endAction,
   recordPaymentAction,
   resendInvoiceAction,
@@ -246,5 +247,22 @@ export function ContractForm(p: { packageId: string; template: string; version: 
         <Msg s={s} ok="Contract saved. New signers get this version." />
       </form>
     </details>
+  );
+}
+
+export function DeleteBatchForm({ batchId }: { batchId: string }) {
+  const [s, action, pending] = useActionState<AceFormResult, FormData>(deleteBatchAction, {});
+  return (
+    <form
+      action={action}
+      className="inline-form"
+      onSubmit={(e) => {
+        if (!confirm("Delete this batch, its open slots and any commission it posted? This can't be undone.")) e.preventDefault();
+      }}
+    >
+      <input type="hidden" name="batchId" value={batchId} />
+      <button disabled={pending} className="danger">{pending ? "Deleting…" : "Delete batch"}</button>
+      <Msg s={s} />
+    </form>
   );
 }

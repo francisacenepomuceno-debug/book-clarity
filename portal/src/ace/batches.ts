@@ -211,6 +211,34 @@ export async function issueBatchInvoice(batchId: string): Promise<ActionResult> 
   return r;
 }
 
+/**
+ * Deletes a batch entered by mistake, with its slots and any commission it posted. Only while no client is in
+ * any of its slots, none of its commission is in a month already paid, and ACE wasn't invoiced through Stripe.
+ */
+export async function deleteBatch(batchId: string): Promise<ActionResult> {
+  const actor = await aceManager();
+  if (!actor) return FORBIDDEN;
+  const batch = await db.aceBatch.findUnique({ where: { id: batchId } });
+  if (!batch) return { ok: false, error: "Batch not found." };
+  if (batch.stripeInvoiceId) return { ok: false, error: "ACE was sent a Stripe invoice for this batch, so it can't be deleted here." };
+  const slots = await db.aceSlot.findMany({ where: { batchId } });
+  if (slots.some((x) => x.clientId)) return { ok: false, error: "Clients are in this batch's slots. It can only be deleted while every slot is open." };
+  const keys = slots.map((x) => `ace-slot:${x.id}`);
+  const entries = await db.commissionEntry.findMany({ where: { invoiceId: { in: keys } } });
+  const paid = entries.length
+    ? await db.commissionStatement.count({ where: { status: "PAID", OR: entries.map((e) => ({ executiveId: e.executiveId, month: e.month })) } })
+    : 0;
+  if (paid) return { ok: false, error: "Some of this batch's commission is in a month already marked paid, so it can't be deleted." };
+  await db.$transaction([
+    db.commissionEntry.deleteMany({ where: { invoiceId: { in: keys } } }),
+    db.aceSlot.deleteMany({ where: { batchId } }),
+    db.aceBatchLine.deleteMany({ where: { batchId } }),
+    db.aceBatch.delete({ where: { id: batchId } }),
+  ]);
+  await writeAudit({ actorId: actor.id, action: "ace_batch_deleted", entity: "AceBatch", entityId: batchId, before: { ...batch, commissionLines: entries.length } });
+  return { ok: true };
+}
+
 /** "Record payment received": a check, wire or other payment made outside Stripe. */
 export async function recordBatchPayment(batchId: string, i: { paidOn: string; method: string; reference: string }): Promise<ActionResult> {
   const actor = await aceManager();

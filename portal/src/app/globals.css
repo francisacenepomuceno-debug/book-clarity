@@ -214,3 +214,4 @@ header.sidebar ~ main { margin-left: 232px; max-width: none; padding: 24px 32px;
 .password-field button.password-toggle { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted, #667); cursor: pointer; }
 .password-field button.password-toggle:hover { color: var(--ink, #1f2a7c); background: rgba(0, 0, 0, 0.05); }
 .password-toggle:focus-visible { outline: 2px solid var(--brand, #1f2a7c); outline-offset: 1px; }
+form button.danger { background: var(--bad, #b42318); }

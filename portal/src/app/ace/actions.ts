@@ -1,12 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/auth/permissions";
 import { savePackage } from "@/packages/packages";
 import { saveContract } from "@/packages/contracts";
-import { createBatch, issueBatchInvoice, recordBatchPayment, setAceContactEmail, setAceCustomer } from "@/ace/batches";
+import { createBatch, deleteBatch, issueBatchInvoice, recordBatchPayment, setAceContactEmail, setAceCustomer } from "@/ace/batches";
 import { assignSlot } from "@/ace/slots";
 import { markContinuing, markEnded } from "@/ace/continuation";
 import { aceCardPayLink } from "@/ace/cardPay";
@@ -57,6 +58,13 @@ export async function createBatchAction(_: AceFormResult, f: FormData): Promise<
   if (!r.ok) return { error: r.error };
   revalidatePath("/ace");
   return { ok: true, batchId: r.batchId };
+}
+
+export async function deleteBatchAction(_: AceFormResult, f: FormData): Promise<AceFormResult> {
+  const r = await deleteBatch(str(f.get("batchId")));
+  if (!r.ok) return { error: r.error };
+  revalidatePath("/ace");
+  redirect("/ace");
 }
 
 export async function recordPaymentAction(_: AceFormResult, f: FormData): Promise<AceFormResult> {
