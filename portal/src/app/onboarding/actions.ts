@@ -10,6 +10,7 @@ const centsOrNull = (v: FormDataEntryValue | null) => (str(v) ? Math.round(Numbe
 export async function startOnboardingAction(_: StartFormResult, f: FormData): Promise<StartFormResult> {
   const r = await startOnboarding({
     name: str(f.get("name")),
+    companyName: str(f.get("companyName")) || null,
     email: str(f.get("email")),
     phone: str(f.get("phone")) || null,
     type: f.get("type") === "ACE" ? "ACE" : "DIRECT",

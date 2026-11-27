@@ -20,7 +20,7 @@ function Table({ rows, showStep, now, owner }: { rows: OnboardingRow[]; showStep
       <tbody>
         {rows.map((r) => (
           <tr key={r.onboardingId}>
-            <td><a href={`/clients/${r.clientId}`}>{r.name}</a><br /><span className="muted">{r.email}</span></td>
+            <td><a href={`/clients/${r.clientId}`}><strong>{r.name}</strong></a>{r.contactName && <div>{r.contactName}</div>}<span className="muted">{r.email}</span></td>
             <td>{r.type === "ACE" ? "ACE" : "Direct"}</td>
             <td>{r.packageName ?? "—"}</td>
             {showStep && (

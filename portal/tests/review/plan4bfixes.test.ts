@@ -75,6 +75,15 @@ describe("#3/#5 onboarding fee and custom price", () => {
     await choosePackage(r.url.split("/onboard/")[1], p.id, now);
     expect((await db.onboarding.findUniqueOrThrow({ where: { id: r.onboardingId } })).onboardingFeeCents).toBe(0);
   });
+  it("keeps the contact and the business apart", async () => {
+    as("OWNER");
+    const r = await startOnboarding({ name: " Jane  Doe ", companyName: " Acme  LLC ", email: "jane@acme.co", type: "DIRECT" });
+    if (!r.ok) throw new Error(r.error);
+    expect(await db.client.findUniqueOrThrow({ where: { id: r.clientId } })).toMatchObject({ name: "Jane Doe", companyName: "Acme LLC" });
+    const r2 = await startOnboarding({ name: "Solo Owner", email: "solo@x.co", type: "DIRECT" });
+    if (!r2.ok) throw new Error(r2.error);
+    expect((await db.client.findUniqueOrThrow({ where: { id: r2.clientId } })).companyName).toBeNull();
+  });
   it("Admins can't set prices", async () => {
     as("ADMIN");
     const p = await db.package.create({ data: { name: "Custom", monthlyPriceCents: 0, onboardingFeeCents: 1, isCustom: true, stripePriceId: "price_c" } });

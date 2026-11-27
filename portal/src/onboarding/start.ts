@@ -14,7 +14,10 @@ export const onboardingLink = (onboardingId: string, base: string = baseUrl()) =
 export const onboardingIdFromToken = (token: string) => verifyLink(PURPOSE, token);
 
 export type StartInput = {
+  /** The contact person. */
   name: string;
+  /** The client's business; optional (the client confirms it in their details). */
+  companyName?: string | null;
   email: string;
   phone?: string | null;
   type: "DIRECT" | "ACE";
@@ -37,9 +40,10 @@ export function pricingFor(pkg: { monthlyPriceCents: number; onboardingFeeCents:
  */
 export async function startOnboarding(i: StartInput): Promise<ActionResult<{ onboardingId: string; clientId: string; url: string }>> {
   const actor = await requirePermission("onboarding.view");
-  const name = i.name.trim();
+  const name = i.name.trim().replace(/\s+/g, " ");
+  const companyName = i.companyName?.trim().replace(/\s+/g, " ") || null;
   const email = i.email.trim().toLowerCase();
-  if (!name) return { ok: false, error: "Enter the client's name." };
+  if (!name) return { ok: false, error: "Enter the contact's name." };
   if (!EMAIL.test(email)) return { ok: false, error: "Enter a valid email address." };
   if (i.onboardingFeeCents != null && (!Number.isInteger(i.onboardingFeeCents) || i.onboardingFeeCents < 0)) return { ok: false, error: "Enter a valid onboarding fee." };
   // A changed fee or a custom price is effectively a discount: Owners only (D1).
@@ -59,14 +63,14 @@ export async function startOnboarding(i: StartInput): Promise<ActionResult<{ onb
 
   const { client, onboarding } = await db.$transaction(async (tx) => {
     const client = await tx.client.create({
-      data: { name, email, phone: i.phone?.trim() || null, type: i.type, status: "ONBOARDING", packageId: i.packageId ?? null },
+      data: { name, companyName, email, phone: i.phone?.trim() || null, type: i.type, status: "ONBOARDING", packageId: i.packageId ?? null },
     });
     const onboarding = await tx.onboarding.create({
       data: { clientId: client.id, packageId: i.packageId ?? null, ...(pricing ?? { onboardingFeeCents: i.onboardingFeeCents ?? null }), createdById: actor.id },
     });
     return { client, onboarding };
   });
-  await writeAudit({ actorId: actor.id, action: "onboarding_started", entity: "Client", entityId: client.id, after: { type: i.type, packageId: i.packageId ?? null } });
+  await writeAudit({ actorId: actor.id, action: "onboarding_started", entity: "Client", entityId: client.id, after: { type: i.type, packageId: i.packageId ?? null, companyName } });
 
   const url = onboardingLink(onboarding.id);
   const t = templates.onboardingInvite({ name, url });
