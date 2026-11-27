@@ -18,6 +18,9 @@ export type AssignedSlot = {
   batchPaid: boolean;
   clientId: string;
   clientName: string;
+  companyName: string | null;
+  email: string | null;
+  batchNote: string | null;
   status: ClientStatus;
   packageId: string;
   packageName: string;
@@ -31,10 +34,11 @@ export async function aceSlotOverview(filter: { packageId?: string } = {}): Prom
   await requirePermission("ace.manage");
   const [slots, batches, packages] = await Promise.all([
     db.aceSlot.findMany(),
-    db.aceBatch.findMany({ select: { id: true, paidAt: true } }),
+    db.aceBatch.findMany({ select: { id: true, paidAt: true, note: true, purchasedAt: true } }),
     db.package.findMany(),
   ]);
   const paid = new Map(batches.map((b) => [b.id, b.paidAt !== null]));
+  const batchNote = new Map(batches.map((b) => [b.id, b.note]));
   const pkgName = new Map(packages.map((p) => [p.id, p.name]));
   const clientIds = slots.flatMap((s) => (s.clientId ? [s.clientId] : []));
   const clients = new Map((await db.client.findMany({ where: { id: { in: clientIds } } })).map((c) => [c.id, c]));
@@ -68,6 +72,9 @@ export async function aceSlotOverview(filter: { packageId?: string } = {}): Prom
         batchPaid: paid.get(s.batchId) ?? false,
         clientId: c.id,
         clientName: c.name,
+        companyName: c.companyName,
+        email: c.email,
+        batchNote: batchNote.get(s.batchId) ?? null,
         status: c.status,
         packageId: s.packageId,
         packageName: pkgName.get(s.packageId) ?? "?",
@@ -76,7 +83,7 @@ export async function aceSlotOverview(filter: { packageId?: string } = {}): Prom
         continuationDecision: c.continuationDecision,
       };
     })
-    .sort((a, b) => a.clientName.localeCompare(b.clientName));
+    .sort((a, b) => (a.companyName || a.clientName).localeCompare(b.companyName || b.clientName));
 
   return {
     byPackage: [...byPackage.values()].sort((a, b) => a.name.localeCompare(b.name)),
