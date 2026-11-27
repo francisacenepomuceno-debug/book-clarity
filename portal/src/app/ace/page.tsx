@@ -9,6 +9,7 @@ import { formatUsd } from "@/lib/money";
 import { fmtDate, todayInTz } from "@/lib/format";
 import { PortalHeader } from "@/app/PortalHeader";
 import { ContinuationButtons, NewBatchForm } from "./Forms";
+import { ClientSearch } from "@/app/ClientSearch";
 
 export const dynamic = "force-dynamic";
 
@@ -70,12 +71,17 @@ export default async function AcePage({ searchParams }: { searchParams: Promise<
               </span>
             ))}
           </p>
-          <table>
-            <thead><tr><th>Client</th><th>Package</th><th>Status</th><th>Start</th><th>Prepaid until</th><th>Batch</th></tr></thead>
+          <ClientSearch tableId="ace-slots" placeholder="Search by company, contact, email, package, status or batch…  ( / )" />
+          <table id="ace-slots">
+            <thead><tr><th>Company</th><th>Contact</th><th>Package</th><th>Status</th><th>Start</th><th>Prepaid until</th><th>Batch</th></tr></thead>
             <tbody>
               {overview.assigned.map((s) => (
-                <tr key={s.slotId}>
-                  <td><a href={`/clients/${s.clientId}`}>{s.clientName}</a></td>
+                <tr
+                  key={s.slotId}
+                  data-search={[s.companyName, s.clientName, s.email, s.packageName, STATUS_LABEL[s.status], s.batchNote].filter(Boolean).join(" ").toLowerCase()}
+                >
+                  <td><a href={`/clients/${s.clientId}`}><strong>{s.companyName || s.clientName}</strong></a></td>
+                  <td>{s.companyName ? s.clientName : <a className="muted" href={`/clients/${s.clientId}#company`}>Add company</a>}</td>
                   <td>{s.packageName}</td>
                   <td>
                     <span className={`badge s-${s.status}`}>{STATUS_LABEL[s.status]}</span>
@@ -84,10 +90,10 @@ export default async function AcePage({ searchParams }: { searchParams: Promise<
                   </td>
                   <td>{fmtDate(s.startDate)}</td>
                   <td>{fmtDate(s.prepaidUntil)}</td>
-                  <td><a href={`/ace/${s.batchId}`}>{s.batchPaid ? "Paid batch" : "Unpaid batch"}</a></td>
+                  <td><a href={`/ace/${s.batchId}`}>{s.batchNote || (s.batchPaid ? "Paid batch" : "Unpaid batch")}</a>{!s.batchPaid && <div className="muted">Unpaid</div>}</td>
                 </tr>
               ))}
-              {overview.assigned.length === 0 && <tr><td colSpan={6} className="muted">No clients in slots{packageFilter ? " for this package" : ""} yet.</td></tr>}
+              {overview.assigned.length === 0 && <tr><td colSpan={7} className="muted">No clients in slots{packageFilter ? " for this package" : ""} yet.</td></tr>}
             </tbody>
           </table>
         </section>

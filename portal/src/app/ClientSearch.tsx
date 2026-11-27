@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /** Filters the dashboard's client tables as you type (name, email, package). Rows carry a data-search attribute. */
-export function ClientSearch({ tableId }: { tableId: string }) {
+export function ClientSearch({ tableId, placeholder }: { tableId: string; placeholder?: string }) {
   const [q, setQ] = useState("");
   const [shown, setShown] = useState<number | null>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -51,7 +51,7 @@ export function ClientSearch({ tableId }: { tableId: string }) {
         value={q}
         onChange={(e) => setQ(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") setQ(""); }}
-        placeholder="Search by company, contact, email or package…  ( / )"
+        placeholder={placeholder ?? "Search by company, contact, email or package…  ( / )"}
         aria-label="Search clients"
       />
       {shown !== null && <span className="muted">{shown === 0 ? "No clients match." : `${shown} match${shown === 1 ? "" : "es"}`}</span>}
