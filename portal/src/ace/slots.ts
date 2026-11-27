@@ -39,6 +39,7 @@ export async function assignSlot(i: {
   }
   const until = prepaidUntil(i.startOn, tz());
   const startDate = startOfDayIn(i.startOn, tz());
+  const ended = until <= new Date();
 
   const result = await db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"client:" + i.clientId}))`;
@@ -64,15 +65,16 @@ export async function assignSlot(i: {
       where: { id: slotId },
       data: { clientId: i.clientId, startDate, prepaidUntil: until, customMonthlyCents: pkg.isCustom ? i.customMonthlyCents! : null },
     });
+    // A past ACE period (already over) is only a record: the client keeps their type, package and status.
     await tx.client.update({
       where: { id: i.clientId },
-      data: { type: "ACE", acePrepaidUntil: until, aceSlotId: slotId, packageId: pkg.id },
+      data: ended ? { aceSlotId: slotId } : { type: "ACE", acePrepaidUntil: until, aceSlotId: slotId, packageId: pkg.id },
     });
     return { ok: true as const, slotId };
   });
   if (!result.ok) return result;
 
-  await refreshClientStatus(i.clientId);
+  if (!ended) await refreshClientStatus(i.clientId);
   await writeAudit({ actorId: actor.id, action: "ace_slot_assigned", entity: "Client", entityId: i.clientId, after: { ...i, prepaidUntil: until } });
   await postAceCommission(result.slotId);
   return result;

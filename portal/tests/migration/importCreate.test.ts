@@ -83,4 +83,19 @@ describe("months already earned on their own (clients who came from ACE)", () =>
     expect(again.problems).toEqual([]);
     expect(again.ready.every((r) => !r.create)).toBe(true);
   });
+
+  it("records a finished ACE period for a client who is Direct now, without changing them", async () => {
+    const growth = (await db.package.findFirstOrThrow({ where: { name: "Growth" } })).id;
+    const b = await createBatch({ purchasedOn: "2026-03-30", note: "Cohort 2 A", lines: [{ packageId: ess, quantity: 1, unitPriceCents: 245000 }], alreadyPaid: { paidOn: "2026-03-30", method: "check", reference: "" }, historical: true });
+    if (!b.ok) throw new Error(b.error);
+    const c = await db.client.create({ data: { name: "Was Ace Co", type: "DIRECT", status: "CURRENT", packageId: growth, stripeSubscriptionId: "sub_was_ace" } });
+    const csv = "client,package,ace_batch,ace_start_date\nWas Ace Co,Essentials,Cohort 2 A,2026-04-28";
+    const plan = await planImport(csv, { createMissingExecutives: false });
+    expect(plan.problems).toEqual([]);
+    expect(await applyImport(plan.ready)).toMatchObject({ applied: 1, failed: [] });
+    const after = await db.client.findUniqueOrThrow({ where: { id: c.id } });
+    expect(after).toMatchObject({ type: "DIRECT", status: "CURRENT", packageId: growth, acePrepaidUntil: null });
+    expect(after.aceSlotId).not.toBeNull();
+    expect((await db.aceSlot.findUniqueOrThrow({ where: { id: after.aceSlotId! } })).packageId).toBe(ess);
+  });
 });
