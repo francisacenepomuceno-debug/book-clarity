@@ -71,4 +71,16 @@ describe("months already earned on their own (clients who came from ACE)", () =>
     await db.client.create({ data: { name: "X", stripeCustomerId: "cus_X" } });
     expect((await planImport("client,months_already_earned\ncus_X,13", { createMissingExecutives: false })).problems[0].error).toMatch(/0 to 12/);
   });
+
+  it("one contact with two companies becomes two clients", async () => {
+    const two = ["client,company,contact_email,package,type,ace_batch,ace_start_date", "Pat Owner,Shop North,pat@x.co,Essentials,ACE,Cohort 2 B,2026-06-01", "Pat Owner,Shop South,pat@x.co,Essentials,ACE,Cohort 2 B,2026-06-03"].join("\n");
+    const plan = await planImport(two, { createMissingExecutives: false, createMissingClients: true });
+    expect(plan.problems).toEqual([]);
+    expect(await applyImport(plan.ready)).toMatchObject({ applied: 2, failed: [] });
+    expect((await db.client.findMany({ orderBy: { companyName: "asc" } })).map((c) => [c.name, c.companyName, !!c.aceSlotId])).toEqual([["Pat Owner", "Shop North", true], ["Pat Owner", "Shop South", true]]);
+    // Re-running matches each by contact + company.
+    const again = await planImport(two, { createMissingExecutives: false, createMissingClients: true });
+    expect(again.problems).toEqual([]);
+    expect(again.ready.every((r) => !r.create)).toBe(true);
+  });
 });

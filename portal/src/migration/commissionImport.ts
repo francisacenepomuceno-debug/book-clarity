@@ -171,7 +171,12 @@ export async function planImport(
       ? clients.filter((c) => c.stripeCustomerId === key)
       : key.includes("@")
         ? clients.filter((c) => c.email?.toLowerCase() === key.toLowerCase())
-        : clients.filter((c) => norm(c.name) === norm(key) || (c.companyName != null && norm(c.companyName) === norm(key)));
+        : clients.filter(
+            (c) =>
+              (norm(c.name) === norm(key) || (c.companyName != null && norm(c.companyName) === norm(key))) &&
+              // One contact can own several companies: with a company column, it has to match too.
+              (!r.company?.trim() || !c.companyName || norm(c.companyName) === norm(r.company)),
+          );
     if (matches.length > 1) return fail(`More than one client matches "${key}". Use their email or Stripe customer ID (cus_…) instead.`);
     let create: ReadyRow["create"];
     if (matches.length === 0) {
@@ -322,7 +327,12 @@ export async function applyImport(rows: ReadyRow[]): Promise<{ applied: number; 
     }
     if (r.create) {
       // Added once: a later run matches them by name instead.
-      const existing = await db.client.findFirst({ where: { name: { equals: r.create.name, mode: "insensitive" } } });
+      const existing = await db.client.findFirst({
+        where: {
+          name: { equals: r.create.name, mode: "insensitive" },
+          ...(r.companyName ? { OR: [{ companyName: null }, { companyName: { equals: r.companyName, mode: "insensitive" } }] } : {}),
+        },
+      });
       const c = existing ?? (await db.client.create({ data: { name: r.create.name, email: r.create.email, phone: r.create.phone, packageId: r.create.packageId, type: r.create.type, status: r.create.type === "ACE" ? "PREPAID_ACE" : "ONBOARDING" } }));
       if (!existing) await writeAudit({ actorId: actor.id, action: "client_added_by_import", entity: "Client", entityId: c.id, after: r.create });
       r = { ...r, clientId: c.id };
