@@ -46,7 +46,11 @@ export default async function OnboardPage({ params }: { params: Promise<{ token:
     return (
       <Shell step={s} ace={ace} waived={waived}>
         <p>{l.pkg ? <>Package: <strong>{l.pkg.name}</strong>. </> : null}Tell us about your business. These details go on your agreement.</p>
-        <DetailsStep token={token} initial={{ business: l.client.name, phone: l.client.phone ?? "", ...((l.onboarding.details ?? {}) as Partial<Details>) } as Record<string, string>} />
+        <DetailsStep token={token} initial={{
+              // Staff entered the business separately: prefill it, and the contact as the person signing.
+              business: l.client.companyName ?? l.client.name,
+              ...(l.client.companyName ? { firstName: l.client.name.split(" ")[0], signerName: l.client.name } : {}),
+              phone: l.client.phone ?? "", ...((l.onboarding.details ?? {}) as Partial<Details>) } as Record<string, string>} />
       </Shell>
     );
   }

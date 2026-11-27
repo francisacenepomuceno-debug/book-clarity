@@ -7,7 +7,8 @@ export function NewClientForm(p: { packages: { id: string; name: string; isCusto
   const [s, action, pending] = useActionState<StartFormResult, FormData>(startOnboardingAction, {});
   return (
     <form action={action} className="inline-form">
-      <label>Client / business name<input name="name" required /></label>
+      <label>Contact name<input name="name" placeholder="First and last name" required /></label>
+      <label>Business / company name<input name="companyName" placeholder="optional" /></label>
       <label>Email<input name="email" type="email" required /></label>
       <label>Phone<input name="phone" placeholder="optional" /></label>
       <label>Type

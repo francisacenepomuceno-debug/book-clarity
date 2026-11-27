@@ -6,6 +6,8 @@ export type OnboardingRow = {
   onboardingId: string;
   clientId: string;
   name: string;
+  /** The contact person, when a company name is set (name is then the company). */
+  contactName: string | null;
   email: string | null;
   type: "DIRECT" | "ACE";
   packageName: string | null;
@@ -33,7 +35,8 @@ export async function listOnboardings(): Promise<OnboardingRow[]> {
   return rows.map((o) => ({
     onboardingId: o.id,
     clientId: o.clientId,
-    name: o.client.name,
+    name: o.client.companyName || o.client.name,
+    contactName: o.client.companyName ? o.client.name : null,
     email: o.client.email,
     type: o.client.type,
     packageName: o.client.package?.name ?? null,
