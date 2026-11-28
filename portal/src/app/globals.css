@@ -215,3 +215,5 @@ header.sidebar ~ main { margin-left: 232px; max-width: none; padding: 24px 32px;
 .password-field button.password-toggle:hover { color: var(--ink, #1f2a7c); background: rgba(0, 0, 0, 0.05); }
 .password-toggle:focus-visible { outline: 2px solid var(--brand, #1f2a7c); outline-offset: 1px; }
 form button.danger { background: var(--bad, #b42318); }
+table.wrap td { white-space: normal; vertical-align: top; }
+table.wrap td:first-child { white-space: nowrap; }
